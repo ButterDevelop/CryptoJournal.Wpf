@@ -1,0 +1,115 @@
+﻿<UserControl x:Class="CryptoJournal.Wpf.Views.PositionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:CryptoJournal.Wpf.UI"
+             xmlns:scm="clr-namespace:System.ComponentModel;assembly=WindowsBase"
+             xmlns:views="clr-namespace:CryptoJournal.Wpf.Views">
+
+    <UserControl.Resources>
+        <ui:PnlToBrushConverter x:Key="PnlToBrush"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <CollectionViewSource x:Key="PositionsView" Source="{Binding Positions}">
+            <CollectionViewSource.SortDescriptions>
+                <scm:SortDescription PropertyName="MarketValueQuote" Direction="Descending"/>
+            </CollectionViewSource.SortDescriptions>
+        </CollectionViewSource>
+    </UserControl.Resources>
+
+    <!-- Keyboard bindings for panel contextual dismissal -->
+    <UserControl.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding ClearSelectedPositionCommand}" />
+    </UserControl.InputBindings>
+
+    <!-- Background overlay captures outside click events to dismiss active panels -->
+    <Grid Margin="12"
+          Background="Transparent"
+          MouseDown="Root_MouseDown">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DataGrid Grid.Row="0"
+                  ItemsSource="{Binding Source={StaticResource PositionsView}}"
+                  SelectedItem="{Binding SelectedPosition, Mode=TwoWay}"
+                  AlternationCount="2"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  ColumnWidth="*"
+                  HeadersVisibility="Column"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True">
+
+            <DataGrid.Columns>
+                <DataGridTemplateColumn Header="Symbol" Width="SizeToCells" MinWidth="140" SortMemberPath="Symbol">
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                            <Setter Property="VerticalContentAlignment"   Value="Center"/>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
+
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <Image Width="16" Height="16"
+                                       Margin="0,0,8,0"
+                                       Source="{Binding SymbolIcon}"
+                                       SnapsToDevicePixels="True"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <TextBlock Text="{Binding Symbol}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTextColumn Header="Qty"               Binding="{Binding Quantity}"/>
+                <DataGridTextColumn Header="CostBasis (quote)" Binding="{Binding CostBasisQuote, StringFormat={}{0:C2}}"/>
+                <DataGridTextColumn Header="Mark"              Binding="{Binding MarkPriceQuote, StringFormat={}{0:C2}}"/>
+                <DataGridTextColumn Header="Market Value"      Binding="{Binding MarketValueQuote, StringFormat={}{0:C2}}"
+                                    SortMemberPath="MarketValueQuote" SortDirection="Descending"/>
+
+                <DataGridTemplateColumn Header="Unrealized PnL">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding UnrealizedPnlQuote, StringFormat={}{0:C2}}"
+                                       Foreground="{Binding UnrealizedPnlQuote, Converter={StaticResource PnlToBrush}}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTemplateColumn Header="Unrealized %" >
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding UnrealizedPnlPct, StringFormat={}{0:P2}, TargetNullValue=—}"
+                                       Foreground="{Binding UnrealizedPnlPct, Converter={StaticResource PnlToBrush}}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Position Scenario Editor Panel -->
+        <Border Grid.Row="1"
+                x:Name="ScenarioPanel"
+                Margin="0,12,0,0"
+                Padding="12"
+                CornerRadius="12"
+                Background="#2B2B2B"
+                Visibility="{Binding IsScenarioPanelOpen, Converter={StaticResource BoolToVis}}">
+            <views:ScenarioEditorView DataContext="{Binding ScenarioEditor}" />
+        </Border>
+
+    </Grid>
+</UserControl>

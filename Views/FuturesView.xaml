@@ -1,0 +1,150 @@
+<UserControl x:Class="CryptoJournal.Wpf.Views.FuturesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:CryptoJournal.Wpf.UI"
+             xmlns:views="clr-namespace:CryptoJournal.Wpf.Views">
+
+    <UserControl.Resources>
+        <ui:PnlToBrushConverter x:Key="PnlToBrush"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
+
+    <UserControl.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding ClearSelectedPositionCommand}"/>
+    </UserControl.InputBindings>
+
+    <Grid Margin="12"
+          Background="Transparent"
+          MouseDown="Root_MouseDown">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Active Futures Contracts Grid -->
+        <DataGrid Grid.Row="0"
+                  ItemsSource="{Binding Positions}"
+                  SelectedItem="{Binding SelectedPosition, Mode=TwoWay}"
+                  AlternationCount="2"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  ColumnWidth="*"
+                  HeadersVisibility="Column"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True">
+
+            <DataGrid.Columns>
+                <!-- Graphical Asset Identifier -->
+                <DataGridTemplateColumn Header="Symbol" Width="SizeToCells" MinWidth="140" SortMemberPath="Symbol">
+                    <DataGridTemplateColumn.CellStyle>
+                        <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                            <Setter Property="VerticalContentAlignment"   Value="Center"/>
+                        </Style>
+                    </DataGridTemplateColumn.CellStyle>
+
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center">
+                                <Image Width="16" Height="16"
+                                       Margin="0,0,8,0"
+                                       Source="{Binding SymbolIcon}"
+                                       SnapsToDevicePixels="True"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <TextBlock Text="{Binding Symbol}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Position Direction Indicator (Long/Short) -->
+                <DataGridTemplateColumn Header="Side" SortMemberPath="SideLabel">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="4" 
+                                    Padding="6,2" 
+                                    HorizontalAlignment="Center" 
+                                    VerticalAlignment="Center">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#1A3A5A"/> <!-- Default blue tone for Long positions -->
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SideLabel}" Value="SHORT">
+                                                <Setter Property="Background" Value="#5A2A1A"/> <!-- Orange/Red tone for Short positions -->
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding SideLabel}" 
+                                           FontWeight="SemiBold" 
+                                           FontSize="11">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#66B2FF"/> <!-- Light blue primary text for Long positions -->
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SideLabel}" Value="SHORT">
+                                                    <Setter Property="Foreground" Value="#FF9966"/> <!-- Orange primary text for Short positions -->
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Border>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <DataGridTextColumn Header="Qty"         Binding="{Binding Quantity}"/>
+                <DataGridTextColumn Header="Avg Entry"   Binding="{Binding AvgEntryPrice, StringFormat={}{0:C2}}"/>
+                <DataGridTextColumn Header="Leverage"    Binding="{Binding Leverage, StringFormat={}{0:0.#}x}"/>
+                <DataGridTextColumn Header="Margin"      Binding="{Binding Margin, StringFormat={}{0:C2}}"/>
+                <DataGridTextColumn Header="Liq. Price"  Binding="{Binding LiquidationPrice, StringFormat={}{0:C2}, TargetNullValue=—}"/>
+                <DataGridTextColumn Header="Mark"        Binding="{Binding MarkPrice, StringFormat={}{0:C2}, TargetNullValue=—}"/>
+                <DataGridTextColumn Header="TP"          Binding="{Binding TakeProfit, StringFormat={}{0:C2}, TargetNullValue=—}"/>
+                <DataGridTextColumn Header="SL"          Binding="{Binding StopLoss, StringFormat={}{0:C2}, TargetNullValue=—}"/>
+
+                <!-- Unrealized Profit/Loss -->
+                <DataGridTemplateColumn Header="uPnL">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding UnrealizedPnl, StringFormat={}{0:C2}, TargetNullValue=—}"
+                                       Foreground="{Binding UnrealizedPnl, Converter={StaticResource PnlToBrush}}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Return on Equity Percentage -->
+                <DataGridTemplateColumn Header="ROE %">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding RoePct, StringFormat={}{0:P2}, TargetNullValue=—}"
+                                       Foreground="{Binding RoePct, Converter={StaticResource PnlToBrush}}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"/>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Futures Scenario Editor Overlay (Take-Profit Layers) -->
+        <Border Grid.Row="1"
+                x:Name="ScenarioPanel"
+                Margin="0,12,0,0"
+                Padding="12"
+                CornerRadius="12"
+                Background="#2B2B2B"
+                Visibility="{Binding IsScenarioPanelOpen, Converter={StaticResource BoolToVis}}">
+            <views:ScenarioEditorView DataContext="{Binding ScenarioEditor}"/>
+        </Border>
+
+    </Grid>
+</UserControl>

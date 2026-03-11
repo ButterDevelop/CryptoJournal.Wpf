@@ -1,0 +1,204 @@
+﻿<UserControl x:Class="CryptoJournal.Wpf.Views.ScenarioEditorView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:ui="clr-namespace:CryptoJournal.Wpf.UI"
+             xmlns:views="clr-namespace:CryptoJournal.Wpf.Views">
+
+    <UserControl.Resources>
+        <ui:FlexibleDecimalConverter x:Key="FlexDec"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Component Header Area -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Vertical">
+                <TextBlock FontSize="16" FontWeight="SemiBold" Text="{Binding HeaderTitle}" />
+                <TextBlock Opacity="0.8" Text="{Binding HeaderSubtitle}" />
+            </StackPanel>
+
+            <Button Grid.Column="1"
+                    Style="{StaticResource MaterialDesignToolButton}"
+                    Command="{Binding CloseUiCommand}">
+                <materialDesign:PackIcon Kind="Close" Width="18" Height="18"/>
+            </Button>
+        </Grid>
+
+        <!-- Execution Summary Metrics -->
+        <Grid Grid.Row="1" Margin="0,12,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="24"/>
+                <!-- Horizontal Spacer -->
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="24"/>
+                <!-- Horizontal Spacer -->
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*" />
+                <!-- Flexible Layout Filler -->
+                <ColumnDefinition Width="Auto"/>
+                <!-- Input Mode Toggle -->
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="Planned: " VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" Text="{Binding PlannedQty}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+            <TextBlock Grid.Column="3" Text="Remaining: " VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="4" Text="{Binding RemainingQty}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+            <TextBlock Grid.Column="6" Text="Position: " VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="7" Text="{Binding PositionQty}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+
+            <CheckBox Grid.Column="9"
+                      VerticalAlignment="Center"
+                      Margin="12,0,0,0"
+                      Content="Input as %"
+                      IsChecked="{Binding IsPercentMode}"/>
+        </Grid>
+
+        <!-- Scenario Execution Legs Grid -->
+        <DataGrid Grid.Row="2"
+                  ItemsSource="{Binding Legs}"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  IsReadOnly="False"
+                  HeadersVisibility="Column"
+                  EnableRowVirtualization="True"
+                  EnableColumnVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  ScrollViewer.CanContentScroll="True"
+                  RowHeaderWidth="0"
+                  GridLinesVisibility="None"
+                  SelectionMode="Single"
+                  SelectionUnit="CellOrRowHeader"
+                  ui:DataGridCenteringAssist.Enable="True"
+                  materialDesign:DataGridAssist.CellPadding="10,6"
+                  materialDesign:DataGridAssist.ColumnHeaderPadding="10,8"
+                  Style="{StaticResource MaterialDesignDataGrid}"
+                  ColumnWidth="SizeToCells"
+                  MinRowHeight="44"
+                  RowHeight="44"
+                  CanUserSortColumns="False">
+
+            <DataGrid.Columns>
+
+                <!-- Row Deletion Column -->
+                <DataGridTemplateColumn Width="56"
+                                        IsReadOnly="True"
+                                        CanUserResize="False"
+                                        MinWidth="50">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Style="{StaticResource MaterialDesignIconButton}"
+                                    Width="32" Height="32"
+                                    Padding="0"
+                                    MinWidth="0" MinHeight="0"
+                                    Focusable="False"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    ToolTip="Delete"
+                                    Command="{Binding DataContext.RemoveLegCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    CommandParameter="{Binding}">
+                                <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20"/>
+                            </Button>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+
+                <!-- Volume Input Column -->
+                <DataGridTextColumn Header="Qty / %"
+                                    Width="SizeToHeader"
+                                    MinWidth="120"
+                                    Binding="{Binding InputAmount,
+                                                      Mode=TwoWay,
+                                                      Converter={StaticResource FlexDec},
+                                                      UpdateSourceTrigger=PropertyChanged,
+                                                      Delay=250}">
+                    <DataGridTextColumn.EditingElementStyle>
+                        <Style TargetType="TextBox">
+                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                            <Setter Property="TextAlignment" Value="Center"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="MinHeight" Value="28"/>
+                        </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                </DataGridTextColumn>
+
+                <!-- Execution Price Column -->
+                <DataGridTextColumn Header="Target price"
+                                    Width="SizeToHeader"
+                                    MinWidth="160"
+                                    Binding="{Binding TargetPrice,
+                                                      Mode=TwoWay,
+                                                      Converter={StaticResource FlexDec},
+                                                      UpdateSourceTrigger=PropertyChanged,
+                                                      Delay=250}">
+                    <DataGridTextColumn.EditingElementStyle>
+                        <Style TargetType="TextBox">
+                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                            <Setter Property="VerticalContentAlignment" Value="Center"/>
+                            <Setter Property="TextAlignment" Value="Center"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="MinHeight" Value="28"/>
+                        </Style>
+                    </DataGridTextColumn.EditingElementStyle>
+                </DataGridTextColumn>
+
+                <DataGridTextColumn Header="Note"
+                                    Width="*"
+                                    MinWidth="150"
+                                    Binding="{Binding Note, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Component Footer Area -->
+        <Grid Grid.Row="3" Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                       Foreground="Tomato"
+                       VerticalAlignment="Center"
+                       Text="{Binding ErrorText}"/>
+
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Right">
+                <Button Content="+ Add leg"
+                        Height="32"
+                        Padding="12,0"
+                        Margin="0,0,12,0"
+                        VerticalAlignment="Center"
+                        Command="{Binding AddLegCommand}"/>
+                <Button Content="Save"
+                        Height="32"
+                        Padding="12,0"
+                        VerticalAlignment="Center"
+                        IsEnabled="{Binding IsDirty}"
+                        Command="{Binding SaveCommand}"/>
+            </StackPanel>
+        </Grid>
+
+    </Grid>
+</UserControl>

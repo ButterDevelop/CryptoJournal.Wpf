@@ -1,0 +1,37 @@
+<Window x:Class="CryptoJournal.Wpf.Views.Dialogs.ImageViewerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        Title="Image Viewer" 
+        Height="700" Width="1000"
+        WindowStartupLocation="CenterOwner"
+        Background="#1A1A1A"
+        Foreground="White"
+        PreviewKeyDown="Window_PreviewKeyDown">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+    <Grid>
+        <Image x:Name="MainImage" 
+               Source="{Binding CurrentImage.ImageSource}" 
+               Stretch="Uniform" 
+               RenderOptions.BitmapScalingMode="HighQuality"/>
+        
+        <!-- Pagination Controls -->
+        <Button Style="{StaticResource MaterialDesignFloatingActionMiniDarkButton}"
+                HorizontalAlignment="Left" VerticalAlignment="Center" Margin="16"
+                Click="Prev_Click"
+                Visibility="{Binding HasMultiple, Converter={StaticResource BoolToVisibilityConverter}}"
+                IsEnabled="{Binding CanGoPrev}">
+            <materialDesign:PackIcon Kind="ChevronLeft" Width="24" Height="24"/>
+        </Button>
+
+        <Button Style="{StaticResource MaterialDesignFloatingActionMiniDarkButton}"
+                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="16"
+                Click="Next_Click"
+                Visibility="{Binding HasMultiple, Converter={StaticResource BoolToVisibilityConverter}}"
+                IsEnabled="{Binding CanGoNext}">
+            <materialDesign:PackIcon Kind="ChevronRight" Width="24" Height="24"/>
+        </Button>
+    </Grid>
+</Window>

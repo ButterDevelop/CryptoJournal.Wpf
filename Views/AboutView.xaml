@@ -1,0 +1,248 @@
+﻿<UserControl x:Class="CryptoJournal.Wpf.Views.AboutView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:ui="clr-namespace:CryptoJournal.Wpf.UI">
+
+    <UserControl.Resources>
+        <!-- Window Width Dependent Font Scaling -->
+        <ui:ResponsiveFontConverter x:Key="ResponsiveFont"/>
+
+        <!-- Shared Hyperlink Formatting -->
+        <Style x:Key="RepoLinkStyle" TargetType="{x:Type Hyperlink}">
+            <Setter Property="Foreground" Value="#3EA6FF"/>
+            <Setter Property="TextDecorations" Value="{x:Null}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="TextDecorations" Value="Underline"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Flat Icon Button Style Template -->
+        <Style x:Key="FlatIconButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="ToolTipService.ShowDuration" Value="30000"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Width="{TemplateBinding Width}"
+                                Height="{TemplateBinding Height}"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#22FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid Margin="20">
+            <materialDesign:Card Padding="22"
+                                 Background="#2E2E2E"
+                                 UniformCornerRadius="16">
+                <StackPanel>
+
+                    <!-- Application Information Header -->
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <materialDesign:PackIcon Kind="InformationOutline"
+                                                 Width="22" Height="22"
+                                                 Margin="0,0,10,0"
+                                                 Foreground="White"/>
+                        <TextBlock Text="{Binding AppName}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                      Path=ActualWidth,
+                                                      Converter={StaticResource ResponsiveFont},
+                                                      ConverterParameter=Title}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding VersionText}"
+                               Margin="0,6,0,14"
+                               Opacity="0.75"
+                               FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                  Path=ActualWidth,
+                                                  Converter={StaticResource ResponsiveFont},
+                                                  ConverterParameter=Body}" />
+
+                    <TextBlock Text="{Binding ShortDescription}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,14"
+                               Opacity="0.9"
+                               FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                  Path=ActualWidth,
+                                                  Converter={StaticResource ResponsiveFont},
+                                                  ConverterParameter=Body}" />
+
+                    <TextBlock Text="Key features"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"
+                               FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                  Path=ActualWidth,
+                                                  Converter={StaticResource ResponsiveFont},
+                                                  ConverterParameter=Section}" />
+
+                    <ItemsControl ItemsSource="{Binding Features}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock TextWrapping="Wrap"
+                                       Margin="0,2,0,2"
+                                       FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                          Path=ActualWidth,
+                                                          Converter={StaticResource ResponsiveFont},
+                                                          ConverterParameter=Body}">
+                                    <Run Text="• "/>
+                                    <Run Text="{Binding Path=.}"/>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <Border Height="1" Margin="0,16,0,14" Background="#33FFFFFF"/>
+
+                    <!-- Source Code Repository Link -->
+                    <TextBlock Text="Source code"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,6"
+                               FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                  Path=ActualWidth,
+                                                  Converter={StaticResource ResponsiveFont},
+                                                  ConverterParameter=Section}" />
+
+                    <DockPanel LastChildFill="False" VerticalAlignment="Center">
+
+                        <!-- Copy to Clipboard Action -->
+                        <Button Style="{StaticResource FlatIconButtonStyle}"
+                                Command="{Binding CopyRepoUrlCommand}"
+                                DockPanel.Dock="Left"
+                                Width="34"
+                                Height="34"
+                                ToolTip="Copy link">
+                            <materialDesign:PackIcon Kind="ContentCopy"
+                                                     Width="18" Height="18"
+                                                     Foreground="#A8A8A8"/>
+                        </Button>
+
+                        <!-- Hyperlink Element -->
+                        <TextBlock TextWrapping="Wrap"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"
+                                   FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                      Path=ActualWidth,
+                                                      Converter={StaticResource ResponsiveFont},
+                                                      ConverterParameter=Body}">
+                        <Hyperlink Style="{StaticResource RepoLinkStyle}"
+                                   Command="{Binding OpenRepoCommand}">
+                            <Run Text="{Binding RepoUrl, Mode=OneWay}"/>
+                        </Hyperlink>
+                        </TextBlock>
+
+                    </DockPanel>
+
+                    <!-- Donation and Support Section -->
+
+                    <Border Height="1" Margin="0,16,0,14" Background="#33FFFFFF"/>
+
+                    <TextBlock Text="Support development"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,6"
+                               FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                  Path=ActualWidth,
+                                                  Converter={StaticResource ResponsiveFont},
+                                                  ConverterParameter=Section}" />
+
+                    <TextBlock Text="{Binding DonateText}"
+                               TextWrapping="Wrap"
+                               Opacity="0.90"
+                               Margin="0,0,0,10"
+                               FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                  Path=ActualWidth,
+                                                  Converter={StaticResource ResponsiveFont},
+                                                  ConverterParameter=Body}" />
+
+                    <DockPanel LastChildFill="False" VerticalAlignment="Center">
+
+                        <!-- Copy Donation Address Action -->
+                        <Button Style="{StaticResource FlatIconButtonStyle}"
+                                Command="{Binding CopyDonateUrlCommand}"
+                                DockPanel.Dock="Left"
+                                Width="34"
+                                Height="34"
+                                ToolTip="Copy donation link">
+                            <materialDesign:PackIcon Kind="ContentCopy"
+                                                     Width="18" Height="18"
+                                                     Foreground="#A8A8A8"/>
+                        </Button>
+
+                        <!-- Donation Hyperlink Element -->
+                        <TextBlock TextWrapping="Wrap"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,10,0"
+                                   FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                      Path=ActualWidth,
+                                                      Converter={StaticResource ResponsiveFont},
+                                                      ConverterParameter=Body}">
+                        <Hyperlink Style="{StaticResource RepoLinkStyle}"
+                                   Command="{Binding OpenDonateCommand}">
+                            <Run Text="{Binding DonateUrl, Mode=OneWay}"/>
+                        </Hyperlink>
+                        </TextBlock>
+
+                    </DockPanel>
+
+                    <!-- Upcoming Feature Roadmap -->
+
+                    <Border Height="1" Margin="0,16,0,14" Background="#33FFFFFF"/>
+
+                    <TextBlock Text="Coming features soon"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"
+                               FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                  Path=ActualWidth,
+                                                  Converter={StaticResource ResponsiveFont},
+                                                  ConverterParameter=Section}" />
+
+                    <ItemsControl ItemsSource="{Binding UpcomingFeatures}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock TextWrapping="Wrap"
+                                           Margin="0,2,0,2"
+                                           Opacity="0.90"
+                                           FontSize="{Binding RelativeSource={RelativeSource AncestorType=Window},
+                                                              Path=ActualWidth,
+                                                              Converter={StaticResource ResponsiveFont},
+                                                              ConverterParameter=Body}">
+                                    <Run Text="• "/>
+                                    <Run Text="{Binding Path=.}"/>
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                </StackPanel>
+            </materialDesign:Card>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

@@ -1,0 +1,300 @@
+﻿<Window x:Class="CryptoJournal.Wpf.Views.Dialogs.AddTradeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        xmlns:enums="clr-namespace:CryptoJournal.Wpf.Domain.Enums"
+        xmlns:ui="clr-namespace:CryptoJournal.Wpf.UI"
+        Title="Add Trade"
+        Width="560" Height="620"
+        WindowStartupLocation="CenterOwner"
+        Style="{StaticResource MaterialDesignWindow}"
+        ResizeMode="NoResize"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <ui:FlexibleDecimalConverter  x:Key="DecConv"/>
+        <ui:NullableDecimalConverter  x:Key="NullDecConv"/>
+        <ui:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+        <ui:TxTypeDisplayConverter    x:Key="TxTypeDisplayConv"/>
+        <!-- Enumeration values for Type Selection -->
+        <ObjectDataProvider x:Key="TxTypes"
+                            MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="enums:TxType"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <!-- Local Floating Label Styles -->
+        <Style x:Key="AddTrade.FloatingTextBox"
+               TargetType="TextBox"
+               BasedOn="{StaticResource MaterialDesignFloatingHintTextBox}">
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="True"/>
+        </Style>
+
+        <Style x:Key="AddTrade.FloatingComboBox"
+               TargetType="ComboBox"
+               BasedOn="{StaticResource MaterialDesignFloatingHintComboBox}">
+            <Setter Property="materialDesign:HintAssist.IsFloating" Value="True"/>
+        </Style>
+
+    </Window.Resources>
+
+    <Grid>
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Dialog Header -->
+            <RowDefinition Height="*"/>
+            <!-- Main Content Area -->
+            <RowDefinition Height="Auto"/>
+            <!-- Action Footer -->
+        </Grid.RowDefinitions>
+
+        <!-- Header Region -->
+        <materialDesign:ColorZone Grid.Row="0" Mode="PrimaryDark" Padding="16" Foreground="White">
+            <DockPanel LastChildFill="True">
+                <materialDesign:PackIcon Kind="PlusCircleOutline" Width="24" Height="24" Margin="0,0,12,0"/>
+                <StackPanel>
+                    <TextBlock Text="Add trade" FontSize="18" FontWeight="SemiBold"/>
+                    <TextBlock Text="Create a manual entry" Opacity="0.8" Margin="0,2,0,0"/>
+                </StackPanel>
+            </DockPanel>
+        </materialDesign:ColorZone>
+
+        <!-- Primary Form Content -->
+        <materialDesign:Card Grid.Row="1" Margin="16" Padding="16">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>  <!-- Execution Targets -->
+                    <RowDefinition Height="Auto"/>  <!-- Trade Notes -->
+                    <RowDefinition Height="*"/>     <!-- Attached Files -->
+                </Grid.RowDefinitions>
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="16"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Transaction Time Selection (UTC) -->
+                <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="44"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBox Grid.Column="0"
+                             materialDesign:HintAssist.Hint="Time (UTC)"
+                             Style="{StaticResource AddTrade.FloatingTextBox}"
+                             Text="{Binding TimeUtcText, UpdateSourceTrigger=PropertyChanged}"/>
+
+                    <!-- Time Picker Trigger -->
+                    <Button x:Name="TimePopupButton"
+                            Grid.Column="2"
+                            Width="44" Height="44"
+                            Style="{StaticResource MaterialDesignIconButton}"
+                            Focusable="False"
+                            IsTabStop="False"
+                            FocusVisualStyle="{x:Null}"
+                            Click="TimePopupButton_Click"
+                            ToolTip="Pick date/time">
+                        <materialDesign:PackIcon Kind="CalendarClock" Width="22" Height="22"/>
+                    </Button>
+
+                    <!-- Time Selection Popup -->
+                    <Popup PlacementTarget="{Binding ElementName=TimePopupButton}"
+                           Placement="Bottom"
+                           AllowsTransparency="True"
+                           PopupAnimation="Fade"
+                           StaysOpen="False"
+                           IsOpen="{Binding IsTimePopupOpen, Mode=TwoWay}">
+
+                        <!-- Floating Container Styling -->
+                        <Border Padding="12"
+                                MinWidth="320"
+                                Margin="0,6,0,0"
+                                CornerRadius="12"
+                                Background="{DynamicResource MaterialDesignPaper}">
+
+                            <StackPanel>
+                                <Calendar x:Name="TimeCalendar"
+                                          SelectedDate="{Binding TimeUtcDate, Mode=TwoWay}"
+                                          SelectedDatesChanged="TimeCalendar_SelectedDatesChanged"
+                                          DisplayMode="Month"
+                                          Margin="0,0,0,10"/>
+
+                                <TextBox Text="{Binding TimeUtcTime, UpdateSourceTrigger=PropertyChanged}"
+                                         materialDesign:HintAssist.Hint="Time (HH:mm[:ss])"
+                                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                                         Margin="0,0,0,10"/>
+
+                                <Button x:Name="ApplyTimeButton"
+                                        Content="Apply"
+                                        Command="{Binding ApplyPickedTimeCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        ClickMode="Press"/>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                </Grid>
+
+                <!-- Transaction Type Identifier -->
+                <ComboBox Grid.Row="1" Grid.Column="0"
+                          materialDesign:HintAssist.Hint="Type"
+                          Style="{StaticResource AddTrade.FloatingComboBox}"
+                          ItemsSource="{Binding Source={StaticResource TxTypes}}"
+                          SelectedItem="{Binding Type}"
+                          Margin="0,0,0,12">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource TxTypeDisplayConv}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <!-- Asset Symbol -->
+                <TextBox Grid.Row="1" Grid.Column="2"
+                         materialDesign:HintAssist.Hint="Symbol (e.g. BTC, SOL, USDT)"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Text="{Binding Symbol, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,0,12"/>
+
+                <!-- Execution Quantity -->
+                <TextBox Grid.Row="2" Grid.Column="0"
+                         materialDesign:HintAssist.Hint="Quantity"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Text="{Binding Quantity, Converter={StaticResource DecConv}, UpdateSourceTrigger=LostFocus}"
+                         Margin="0,0,0,12"/>
+
+                <!-- Execution Price -->
+                <TextBox Grid.Row="2" Grid.Column="2"
+                         materialDesign:HintAssist.Hint="Price (Quote)"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Visibility="{Binding PriceVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                         Text="{Binding Price, Converter={StaticResource DecConv}, UpdateSourceTrigger=LostFocus}"
+                         Margin="0,0,0,12"/>
+
+                <!-- Transaction Fee -->
+                <TextBox Grid.Row="3" Grid.Column="0"
+                         materialDesign:HintAssist.Hint="Fee (USDT)"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Text="{Binding FeeQuote, Converter={StaticResource DecConv}, UpdateSourceTrigger=LostFocus}"
+                         Margin="0,0,0,12"/>
+
+                <!-- Position Leverage Constraint (Futures specific) -->
+                <TextBox Grid.Row="3" Grid.Column="2"
+                         materialDesign:HintAssist.Hint="Leverage (e.g. 10)"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Visibility="{Binding LeverageVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                         Text="{Binding Leverage, Converter={StaticResource DecConv}, UpdateSourceTrigger=LostFocus}"
+                         Margin="0,0,0,12"/>
+
+                <!-- Take Profit Execution Target (Restricted to Opening Futures) -->
+                <TextBox Grid.Row="4" Grid.Column="0"
+                         materialDesign:HintAssist.Hint="Take Profit price"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Visibility="{Binding TpSlVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                         Text="{Binding TakeProfit, Converter={StaticResource NullDecConv}, UpdateSourceTrigger=LostFocus}"
+                         Margin="0,0,0,12"/>
+
+                <!-- Stop Loss Execution Target (Restricted to Opening Futures) -->
+                <TextBox Grid.Row="4" Grid.Column="2"
+                         materialDesign:HintAssist.Hint="Stop Loss price"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Visibility="{Binding TpSlVisible, Converter={StaticResource BoolToVisibilityConverter}}"
+                         Text="{Binding StopLoss, Converter={StaticResource NullDecConv}, UpdateSourceTrigger=LostFocus}"
+                         Margin="0,0,0,12"/>
+
+                <!-- Trade Annotations -->
+                <TextBox Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="3"
+                         materialDesign:HintAssist.Hint="Note"
+                         Style="{StaticResource AddTrade.FloatingTextBox}"
+                         Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         Height="60"
+                         Margin="0,0,0,12"/>
+
+                <!-- Attached Documentation -->
+                <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="3">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                        <TextBlock Text="Attachments" Foreground="{DynamicResource MaterialDesignBodyLight}" VerticalAlignment="Center" Margin="0,0,12,0" FontSize="12"/>
+                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                Content="+ Add Image" 
+                                Command="{Binding AddAttachmentCommand}"
+                                Height="24" Padding="8,0" FontSize="11"/>
+                                
+                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                Content="Paste" 
+                                ToolTip="Paste image from clipboard (Ctrl+V)"
+                                Command="{Binding PasteAttachmentCommand}"
+                                Height="24" Padding="8,0" FontSize="11" Margin="8,0,0,0"/>
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Attachments}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,8,8">
+                                    <!-- Thumbnail -->
+                                    <Border Width="60" Height="60" CornerRadius="4" ClipToBounds="True" Background="#33000000">
+                                        <Image Source="{Binding ImageSource}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    </Border>
+                                    
+                                    <!-- Delete Button Overlaid -->
+                                    <Button Style="{StaticResource MaterialDesignIconButton}"
+                                            Width="20" Height="20" Padding="0"
+                                            Background="#99000000" BorderBrush="Transparent"
+                                            VerticalAlignment="Top" HorizontalAlignment="Right" Margin="-6"
+                                            Command="{Binding DataContext.RemoveAttachmentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}">
+                                        <materialDesign:PackIcon Kind="Close" Width="14" Height="14" Foreground="White"/>
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Grid>
+        </materialDesign:Card>
+
+        <!-- Footer buttons -->
+        <DockPanel Grid.Row="2" Margin="16" LastChildFill="True">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Width="120" Margin="0,0,8,0"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        Click="Cancel_Click"
+                        IsCancel="True">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="Close" Width="18" Height="18" Margin="0,0,8,0"/>
+                        <TextBlock Text="Cancel"/>
+                    </StackPanel>
+                </Button>
+
+                <Button Width="120"
+                        Style="{StaticResource MaterialDesignRaisedButton}"
+                        Click="Ok_Click"
+                        IsDefault="True">
+                    <StackPanel Orientation="Horizontal">
+                        <materialDesign:PackIcon Kind="Check" Width="18" Height="18" Margin="0,0,8,0"/>
+                        <TextBlock Text="OK"/>
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </DockPanel>
+
+    </Grid>
+</Window>

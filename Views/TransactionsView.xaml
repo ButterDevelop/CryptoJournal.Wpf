@@ -1,0 +1,605 @@
+﻿<UserControl x:Class="CryptoJournal.Wpf.Views.TransactionsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             xmlns:ui="clr-namespace:CryptoJournal.Wpf.UI"
+             xmlns:scm="clr-namespace:System.ComponentModel;assembly=WindowsBase">
+
+    <UserControl.Resources>
+        <Style x:Key="FilterTextBoxStyle"
+               TargetType="TextBox"
+               BasedOn="{StaticResource MaterialDesignOutlinedTextBox}">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="12,0,12,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="FilterComboBoxStyle"
+               TargetType="ComboBox"
+               BasedOn="{StaticResource MaterialDesignOutlinedComboBox}">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="12,0,12,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="FilterDatePickerStyle"
+               TargetType="DatePicker"
+               BasedOn="{StaticResource MaterialDesignOutlinedDatePicker}">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Padding" Value="12,0,12,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <ObjectDataProvider x:Key="TxTypes"
+                            MethodName="GetValues"
+                            ObjectType="{x:Type sys:Enum}"
+                            xmlns:sys="clr-namespace:System;assembly=mscorlib">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="domainEnums:TxType"
+                        xmlns:domainEnums="clr-namespace:CryptoJournal.Wpf.Domain.Enums"/>
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
+
+        <ui:PnlToBrushConverter x:Key="PnlToBrush"/>
+        <ui:BoolToVisibilityConverter x:Key="BoolVisConv"/>
+        <ui:TxTypeDisplayConverter    x:Key="TxTypeDisplayConv"/>
+    </UserControl.Resources>
+
+    <Grid Margin="12" Background="Transparent" KeyboardNavigation.TabNavigation="Local">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Filters Section -->
+            <RowDefinition Height="*"/>    <!-- DataGrid Table -->
+            <RowDefinition Height="Auto"/> <!-- Bottom Action Controls -->
+        </Grid.RowDefinitions>
+
+        <!-- Filter Control Bar -->
+        <materialDesign:Card Grid.Row="0" Padding="10" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="150"/>
+                    <ColumnDefinition Width="150"/>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBox Grid.Column="0"
+                         Style="{StaticResource FilterTextBoxStyle}"
+                         materialDesign:HintAssist.Hint="Symbol contains"
+                         Text="{Binding SymbolFilter, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,8,0"
+                         KeyboardNavigation.TabIndex="10"/>
+
+                <ComboBox Grid.Column="1"
+                          Style="{StaticResource FilterComboBoxStyle}"
+                          ItemsSource="{Binding TypeFilters}"
+                          SelectedItem="{Binding SelectedTypeFilter}"
+                          DisplayMemberPath="Title"
+                          Margin="0,0,8,0"
+                          KeyboardNavigation.TabIndex="11"/>
+
+                <DatePicker Grid.Column="2"
+                            Style="{StaticResource FilterDatePickerStyle}"
+                            materialDesign:HintAssist.Hint="From date (UTC)"
+                            SelectedDate="{Binding FromUtcDate, Mode=TwoWay}"
+                            Margin="0,0,8,0"
+                            KeyboardNavigation.TabIndex="12"/>
+
+                <DatePicker Grid.Column="3"
+                            Style="{StaticResource FilterDatePickerStyle}"
+                            materialDesign:HintAssist.Hint="To date (UTC)"
+                            SelectedDate="{Binding ToUtcDate, Mode=TwoWay}"
+                            Margin="0,0,8,0"
+                            KeyboardNavigation.TabIndex="13"/>
+
+                <TextBox Grid.Column="4"
+                         Style="{StaticResource FilterTextBoxStyle}"
+                         materialDesign:HintAssist.Hint="Note contains"
+                         Text="{Binding NoteFilter, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,8,0"
+                         KeyboardNavigation.TabIndex="14"/>
+
+                <Button Grid.Column="5"
+                        Command="{Binding ClearFiltersCommand}"
+                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                        KeyboardNavigation.TabIndex="15">
+                    Clear
+                </Button>
+            </Grid>
+        </materialDesign:Card>
+
+        <!-- Primary Table Area (Visual Blur Boundary) -->
+        <Grid Grid.Row="1" ClipToBounds="True" PreviewMouseDown="Root_PreviewMouseDown">
+            <DataGrid ItemsSource="{Binding FillsView}"
+                      Focusable="True"
+                      IsTabStop="True"
+                      SelectedItem="{Binding Selected, Mode=TwoWay}"
+                      ui:DataGridCenteringAssist.Enable="True"
+                      materialDesign:DataGridAssist.CellPadding="10,6"
+                      materialDesign:DataGridAssist.ColumnHeaderPadding="10,8"
+                      RowHeaderWidth="0"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="{Binding IsLocked}"
+                      ColumnWidth="SizeToCells"
+                      HeadersVisibility="Column"
+                      EnableRowVirtualization="True"
+                      EnableColumnVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.CanContentScroll="True"
+                      RowEditEnding="DataGrid_RowEditEnding"
+                      CanUserAddRows="False"
+                      SelectionMode="Single"
+                      SelectionUnit="CellOrRowHeader"
+                      Name="TransactionsDataGrid"
+                      KeyboardNavigation.TabIndex="0"
+                      CanUserSortColumns="True"
+                      RowDetailsVisibilityMode="VisibleWhenSelected"
+                      PreviewMouseLeftButtonDown="TransactionsDataGrid_PreviewMouseLeftButtonDown"
+                      PreparingCellForEdit="TransactionsDataGrid_PreparingCellForEdit">
+
+                <DataGrid.RowDetailsTemplate>
+                    <DataTemplate>
+                        <Border Background="{DynamicResource MaterialDesignCardBackground}" Padding="52,16,24,16" BorderBrush="{DynamicResource MaterialDesignDivider}" BorderThickness="0,1,0,1">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                    <StackPanel Margin="0,0,32,0">
+                                        <TextBlock Text="Fee (USDT)" FontSize="11" Foreground="{DynamicResource MaterialDesignBodyLight}" Margin="0,0,0,4"/>
+                                        <TextBox Text="{Binding FeeQuote, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Width="120" 
+                                                 IsReadOnly="{Binding DataContext.IsLocked, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                    </StackPanel>
+                                    
+                                    <StackPanel>
+                                        <TextBlock Text="Leverage" FontSize="11" Foreground="{DynamicResource MaterialDesignBodyLight}" Margin="0,0,0,4"/>
+                                        <TextBox Text="{Binding Leverage, UpdateSourceTrigger=PropertyChanged}" 
+                                                 Width="80" 
+                                                 IsReadOnly="{Binding DataContext.IsLocked, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                                
+                                <StackPanel>
+                                    <TextBlock Text="Note" FontSize="11" Foreground="{DynamicResource MaterialDesignBodyLight}" Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding Note, UpdateSourceTrigger=PropertyChanged}" 
+                                             TextWrapping="Wrap" MaxHeight="80" AcceptsReturn="True"
+                                             IsReadOnly="{Binding DataContext.IsLocked, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
+                                </StackPanel>
+
+                                <!-- Attached Images Presentation -->
+                                <StackPanel Margin="0,16,0,0">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" VerticalAlignment="Center">
+                                        <TextBlock Text="Attachments" FontSize="11" Foreground="{DynamicResource MaterialDesignBodyLight}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                        <!-- Add Image Action Button -->
+                                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                                Content="+ Add Image" 
+                                                Command="{Binding AddAttachmentCommand}"
+                                                Visibility="{Binding DataContext.IsUnlocked, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource BoolVisConv}}"
+                                                Height="24" Padding="8,0" FontSize="11" ClickMode="Press" Focusable="False"/>
+                                                
+                                        <!-- Paste Clipboard Image Action Button -->
+                                        <Button Style="{StaticResource MaterialDesignOutlinedButton}" 
+                                                Content="Paste" 
+                                                ToolTip="Paste image from clipboard (Ctrl+V)"
+                                                Command="{Binding PasteAttachmentCommand}"
+                                                Visibility="{Binding DataContext.IsUnlocked, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource BoolVisConv}}"
+                                                Height="24" Padding="8,0" FontSize="11" ClickMode="Press" Focusable="False" Margin="8,0,0,0"/>
+                                    </StackPanel>
+
+                                    <ItemsControl ItemsSource="{Binding Attachments}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <WrapPanel Orientation="Horizontal" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Grid Margin="0,0,12,12">
+                                                    <!-- Image Thumbnail with Interactive Hover -->
+                                                    <Border Width="80" Height="80" CornerRadius="4" ClipToBounds="True" Background="#33000000" Cursor="Hand">
+                                                        <Image Source="{Binding ImageSource}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                        <Border.InputBindings>
+                                                            <MouseBinding MouseAction="LeftClick" 
+                                                                          Command="{Binding DataContext.ViewAttachmentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                          CommandParameter="{Binding}"/>
+                                                        </Border.InputBindings>
+                                                    </Border>
+                                                    
+                                                    <!-- Overlay Deletion Button -->
+                                                    <Button Style="{StaticResource MaterialDesignIconButton}"
+                                                            Width="22" Height="22" Padding="0"
+                                                            Background="#99000000" BorderBrush="Transparent"
+                                                            VerticalAlignment="Top" HorizontalAlignment="Right" Margin="-6"
+                                                            Command="{Binding DataContext.RemoveAttachmentCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            Visibility="{Binding DataContext.IsUnlocked, RelativeSource={RelativeSource AncestorType=DataGrid}, Converter={StaticResource BoolVisConv}}"
+                                                            ClickMode="Press" Focusable="False">
+                                                        <materialDesign:PackIcon Kind="Close" Width="14" Height="14" Foreground="White"/>
+                                                    </Button>
+                                                </Grid>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </DataGrid.RowDetailsTemplate>
+
+                <DataGrid.Columns>
+
+                    <!-- Row Deletion Column -->
+                    <DataGridTemplateColumn Width="52" IsReadOnly="True" CanUserResize="False" MinWidth="52">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource MaterialDesignIconButton}"
+                                        Width="32" Height="32"
+                                        Padding="0"
+                                        MinWidth="0" MinHeight="0"
+                                        Focusable="False"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        ToolTip="Delete"
+                                        Command="{Binding DataContext.RemoveFillCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                        CommandParameter="{Binding}"
+                                        IsEnabled="{Binding DataContext.IsUnlocked, RelativeSource={RelativeSource AncestorType=DataGrid}}">
+                                    <materialDesign:PackIcon Kind="DeleteOutline" Width="20" Height="20"/>
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="Time (UTC)" Binding="{Binding TimeUtc, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" Width="SizeToCells"  MinWidth="140"
+                                        SortMemberPath="TimeUtc" SortDirection="Descending"/>
+
+                    <DataGridTemplateColumn Header="Type"
+                                            SortMemberPath="Type"
+                                            Width="SizeToCells" MinWidth="110">
+
+                        <DataGridTemplateColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTemplateColumn.CellStyle>
+
+                        <!-- Display State: Read-Only Centered Text -->
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Type, Converter={StaticResource TxTypeDisplayConv}}"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+
+                        <!-- Editing State: ComboBox Selection -->
+                        <DataGridTemplateColumn.CellEditingTemplate>
+                            <DataTemplate>
+                                <ComboBox MinWidth="90"
+                                          ItemsSource="{Binding Source={StaticResource TxTypes}}"
+                                          SelectedItem="{Binding Type, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          DropDownClosed="TypeCombo_DropDownClosed">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Converter={StaticResource TxTypeDisplayConv}}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                    <ComboBox.ItemContainerStyle>
+                                        <Style TargetType="ComboBoxItem">
+                                            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                        </Style>
+                                    </ComboBox.ItemContainerStyle>
+                                </ComboBox>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellEditingTemplate>
+
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Header="Symbol"
+                                            SortMemberPath="Symbol"
+                                            Width="SizeToCells" MinWidth="140">
+
+                        <DataGridTemplateColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTemplateColumn.CellStyle>
+
+                        <!-- Read-Only Display State -->
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                    <Image Width="16" Height="16"
+                                           Margin="0,0,8,0"
+                                           Source="{Binding SymbolIcon}"
+                                           SnapsToDevicePixels="True"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    <TextBlock Text="{Binding Symbol}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+
+                        <!-- Active Editing State -->
+                        <DataGridTemplateColumn.CellEditingTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center">
+                                    <Image Width="16" Height="16"
+                                           Margin="0,0,8,0"
+                                           Source="{Binding SymbolIcon}"
+                                           Opacity="0.85"/>
+
+                                    <TextBox MinWidth="90"
+                                             HorizontalAlignment="Center"
+                                             VerticalAlignment="Center"
+                                             VerticalContentAlignment="Center"
+                                             TextAlignment="Center"
+                                             Padding="0"
+                                             Text="{Binding Symbol, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellEditingTemplate>
+
+                    </DataGridTemplateColumn>
+
+                    <!-- Composite Column: Quantity and Asset Price -->
+                    <DataGridTemplateColumn Header="Qty @ Price" Width="SizeToHeader" MinWidth="110" SortMemberPath="Quantity">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,2">
+                                    <TextBlock Text="{Binding Quantity}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Price, StringFormat=@ {0:C2}}" FontSize="12" Foreground="#999" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                        <DataGridTemplateColumn.CellEditingTemplate>
+                            <DataTemplate>
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <TextBox Text="{Binding Quantity, UpdateSourceTrigger=PropertyChanged}" 
+                                             materialDesign:HintAssist.Hint="Qty" HorizontalContentAlignment="Center"/>
+                                    <TextBox Text="{Binding Price, UpdateSourceTrigger=PropertyChanged}" 
+                                             materialDesign:HintAssist.Hint="Price" HorizontalContentAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellEditingTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="Value"
+                                        Binding="{Binding ValueQuote, StringFormat={}{0:C2}}"
+                                        Width="SizeToHeader"
+                                        MinWidth="120"
+                                        IsReadOnly="True">
+                        <DataGridTextColumn.CellStyle>
+                            <Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+                                <Setter Property="IsHitTestVisible" Value="False"/>
+                                <Setter Property="Focusable"        Value="False"/>
+                                <Setter Property="IsTabStop"        Value="False"/>
+
+                                <Style.Triggers>
+                                    <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                        <Setter Property="Background"
+                                                Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Background}"/>
+                                        <Setter Property="BorderBrush" Value="{x:Null}"/>
+                                    </Trigger>
+
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background"
+                                                Value="{Binding RelativeSource={RelativeSource AncestorType=DataGridRow}, Path=Background}"/>
+                                        <Setter Property="BorderBrush" Value="{x:Null}"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGridTextColumn.CellStyle>
+                    </DataGridTextColumn>
+
+                    <!-- Composite Column: Execution Targets (TP / SL) -->
+                    <DataGridTemplateColumn Header="Targets" Width="SizeToHeader" MinWidth="110">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <!-- Read-Only Display State -->
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,2">
+                                    <TextBlock Text="{Binding TakeProfit, StringFormat=TP: {0:C2}, TargetNullValue=—}" FontSize="13" Foreground="#4CAF50" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="{Binding StopLoss, StringFormat=SL: {0:C2}, TargetNullValue=—}" FontSize="13" Foreground="#FF9800" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                        <DataGridTemplateColumn.CellEditingTemplate>
+                            <DataTemplate>
+                                <!-- Active Editing State -->
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <TextBox Text="{Binding TakeProfit, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" 
+                                             materialDesign:HintAssist.Hint="TP" HorizontalContentAlignment="Center"/>
+                                    <TextBox Text="{Binding StopLoss, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" 
+                                             materialDesign:HintAssist.Hint="SL" HorizontalContentAlignment="Center" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellEditingTemplate>
+                    </DataGridTemplateColumn>
+                    
+                    <DataGridTemplateColumn Header="Profit (USDT)" Width="SizeToHeader" MinWidth="140"
+                                            IsReadOnly="True" SortMemberPath="RealizedPnlQuote">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding RealizedPnlQuote, StringFormat={}{0:C2}, TargetNullValue=—}"
+                                           IsHitTestVisible="False"
+                                           Foreground="{Binding RealizedPnlQuote, Converter={StaticResource PnlToBrush}}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTemplateColumn Header="Profit %" Width="SizeToHeader" MinWidth="120"
+                                            IsReadOnly="True" SortMemberPath="RealizedPnlPct">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding RealizedPnlPct, StringFormat={}{0:P2}, TargetNullValue=—}"
+                                           IsHitTestVisible="False"
+                                           Foreground="{Binding RealizedPnlPct, Converter={StaticResource PnlToBrush}}"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Row Detail Expansion Toggle -->
+                    <DataGridTemplateColumn Width="60" IsReadOnly="True" CanUserResize="False" MinWidth="60">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ToggleButton IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}, Mode=OneWay}"
+                                              Width="32" Height="32"
+                                              Focusable="False"
+                                              ToolTip="Details"
+                                              Cursor="Hand"
+                                              PreviewMouseLeftButtonDown="ExpandToggleButton_PreviewMouseLeftButtonDown">
+                                    <ToggleButton.Style>
+                                        <Style TargetType="ToggleButton">
+                                            <Setter Property="Foreground" Value="#B0B0B0"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Foreground" Value="White"/>
+                                                    <!-- Subtle dark translucent overlay on hover -->
+                                                    <Setter Property="Background" Value="#1A000000"/>
+                                                </Trigger>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource PrimaryHueMidBrush}"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ToggleButton.Style>
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border Background="{TemplateBinding Background}" CornerRadius="16">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                    <materialDesign:PackIcon Width="24" Height="24" Foreground="{Binding RelativeSource={RelativeSource AncestorType=ToggleButton}, Path=Foreground}">
+                                        <materialDesign:PackIcon.Style>
+                                            <Style TargetType="materialDesign:PackIcon">
+                                                <Setter Property="Kind" Value="ChevronDown"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}}" Value="True">
+                                                        <Setter Property="Kind" Value="ChevronUp"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </materialDesign:PackIcon.Style>
+                                    </materialDesign:PackIcon>
+                                </ToggleButton>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- DataGrid Bottom Edge Gradient Blur Effect -->
+            <Rectangle Height="30"
+                       VerticalAlignment="Bottom"
+                       IsHitTestVisible="False"
+                       Panel.ZIndex="20"
+                       CacheMode="BitmapCache">
+                <Rectangle.Fill>
+                    <!-- Project visual mask upwards from the bottom boundary -->
+                    <VisualBrush Visual="{Binding ElementName=TransactionsDataGrid}"
+                                 Stretch="None"
+                                 AlignmentY="Bottom"
+                                 AlignmentX="Center"/>
+                </Rectangle.Fill>
+
+                <Rectangle.Effect>
+                    <BlurEffect Radius="10"/>
+                </Rectangle.Effect>
+
+                <!-- Gradual opacity fade effect vertically -->
+                <Rectangle.OpacityMask>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#00FFFFFF" Offset="0"/>
+                        <GradientStop Color="#E6FFFFFF" Offset="1"/>
+                    </LinearGradientBrush>
+                </Rectangle.OpacityMask>
+            </Rectangle>
+
+            <!-- Secondary overlay gradient to emphasize the separation line -->
+            <Rectangle Height="30"
+                   VerticalAlignment="Bottom"
+                   IsHitTestVisible="False"
+                   Panel.ZIndex="21">
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#001A1A1A" Offset="0"/>
+                        <GradientStop Color="#661A1A1A" Offset="1"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+        </Grid>
+
+        <!-- Bottom Operation Controls -->
+        <Grid Grid.Row="2" Margin="0,12,0,0">
+            <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Bottom"
+                    Panel.ZIndex="10">
+
+                <Button Style="{StaticResource MaterialDesignIconButton}"
+                    Width="44" Height="44"
+                    Command="{Binding ToggleLockCommand}"
+                    ToolTip="Lock / Unlock"
+                    Name="LockUnlockButton">
+                    <materialDesign:PackIcon Width="22" Height="22">
+                        <materialDesign:PackIcon.Style>
+                            <Style TargetType="{x:Type materialDesign:PackIcon}">
+                                <Setter Property="Kind" Value="Lock"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLocked}" Value="False">
+                                        <Setter Property="Kind" Value="LockOpenVariantOutline"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </materialDesign:PackIcon.Style>
+                    </materialDesign:PackIcon>
+                </Button>
+
+                <Button Width="56" Height="56"
+                    Margin="8,0,0,0"
+                    Command="{Binding AddTradeCommand}"
+                    IsEnabled="{Binding IsUnlocked}"
+                    Style="{StaticResource MaterialDesignFloatingActionButton}"
+                    ToolTip="Add trade">
+                    <materialDesign:PackIcon Kind="Plus" Width="24" Height="24"/>
+                </Button>
+            </StackPanel>
+
+            <!-- Environment Selection Button -->
+            <Button HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="12,0,0,0"
+                Command="{Binding DataContext.OpenEnvironmentsCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                ToolTip="Environments"
+                Width="56" Height="56"
+                Panel.ZIndex="100"
+                Focusable="False">
+                <materialDesign:PackIcon Kind="LayersOutline" Width="32" Height="32"/>
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource MaterialDesignIconButton}">
+                        <Setter Property="Opacity" Value="0.70"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Opacity" Value="1.0"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
+    </Grid>
+
+</UserControl>
