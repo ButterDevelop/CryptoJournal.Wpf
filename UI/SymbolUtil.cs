@@ -2,7 +2,7 @@
 
 public static class SymbolUtil
 {
-    public static string NormalizeBase(string raw, string quote = "USDT")
+    public static string NormalizeBase(string raw, string quote)
     {
         raw = (raw ?? "").Trim().ToUpperInvariant();
 
@@ -16,13 +16,13 @@ public static class SymbolUtil
         return raw;
     }
 
-    public static string ToPair(string baseSymbol, string quote = "USDT")
+    public static string ToPair(string baseSymbol, string quote)
     {
         baseSymbol = (baseSymbol ?? "").Trim().ToUpperInvariant();
         quote = (quote ?? "").Trim().ToUpperInvariant();
         return baseSymbol == quote ? quote : baseSymbol + quote;
     }
 
-    public static bool IsQuote(string baseSymbol, string quote = "USDT")
+    public static bool IsQuote(string baseSymbol, string quote)
         => string.Equals(baseSymbol?.Trim(), quote, StringComparison.OrdinalIgnoreCase);
 }

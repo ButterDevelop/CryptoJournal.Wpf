@@ -152,7 +152,7 @@ public partial class DashboardViewModel : ObservableObject
         PortfolioSnapshot                     snap,
         IReadOnlyList<TradeFill>              fills,
         IReadOnlyDictionary<string, decimal>? marks,
-        string                                quote = "USDT",
+        string                                quote,
         CancellationToken                     ct    = default)
     {
         ArgumentNullException.ThrowIfNull(snap);
@@ -625,7 +625,7 @@ public partial class DashboardViewModel : ObservableObject
 internal static class CashCalculator
 {
     // Simple USDT Cash: Buy/Sell + Deposit/Withdraw by quote symbol + Fee
-    public static decimal ComputeQuoteCash(IReadOnlyList<TradeFill> fills, string quote = "USDT")
+    public static decimal ComputeQuoteCash(IReadOnlyList<TradeFill> fills, string quote)
     {
         quote = quote.Trim().ToUpperInvariant();
         decimal cash = 0m;

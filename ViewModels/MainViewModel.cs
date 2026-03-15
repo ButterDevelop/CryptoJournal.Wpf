@@ -188,10 +188,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         var fills = TransactionsVm.FillsSeq.ToList();
         Dictionary<string, decimal>? marks = null;
 
+        string quote = _env.Current.QuoteCurrency;
+
         if (withPrices)
         {
-            string quote = _env.Current.QuoteCurrency;
-
             var bases = fills
                 .Select(f => f.Symbol)
                 .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -221,7 +221,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         await PositionsVm.SetPositionsAsync(snapshot.Positions);
         await FuturesVm.SetPositionsAsync(snapshot.FuturesPositions);
-        await DashboardVm.UpdateAsync(snapshot, fills, marks);
+        await DashboardVm.UpdateAsync(snapshot, fills, marks, quote);
     }
 
     public void Dispose()

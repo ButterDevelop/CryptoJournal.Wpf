@@ -184,7 +184,7 @@
 
                 <!-- Transaction Fee -->
                 <TextBox Grid.Row="3" Grid.Column="0"
-                         materialDesign:HintAssist.Hint="Fee (USDT)"
+                         materialDesign:HintAssist.Hint="Fee (Quote)"
                          Style="{StaticResource AddTrade.FloatingTextBox}"
                          Text="{Binding FeeQuote, Converter={StaticResource DecConv}, UpdateSourceTrigger=LostFocus}"
                          Margin="0,0,0,12"/>

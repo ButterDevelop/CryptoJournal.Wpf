@@ -39,7 +39,7 @@
 
                 <materialDesign:Card Padding="14" Margin="16,0,12,12">
                     <StackPanel>
-                        <TextBlock Text="Free funds (USDT cash)" Opacity="0.75"/>
+                        <TextBlock Text="Free funds (quote cash)" Opacity="0.75"/>
                         <TextBlock Text="{Binding CashQuote, StringFormat={}{0:C2}}"
                                    FontSize="22" FontWeight="SemiBold"/>
                     </StackPanel>

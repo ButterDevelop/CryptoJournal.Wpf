@@ -145,7 +145,7 @@
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                                     <StackPanel Margin="0,0,32,0">
-                                        <TextBlock Text="Fee (USDT)" FontSize="11" Foreground="{DynamicResource MaterialDesignBodyLight}" Margin="0,0,0,4"/>
+                                        <TextBlock Text="Fee (Quote)" FontSize="11" Foreground="{DynamicResource MaterialDesignBodyLight}" Margin="0,0,0,4"/>
                                         <TextBox Text="{Binding FeeQuote, UpdateSourceTrigger=PropertyChanged}" 
                                                  Width="120" 
                                                  IsReadOnly="{Binding DataContext.IsLocked, RelativeSource={RelativeSource AncestorType=DataGrid}}"/>
@@ -422,7 +422,7 @@
                         </DataGridTemplateColumn.CellEditingTemplate>
                     </DataGridTemplateColumn>
                     
-                    <DataGridTemplateColumn Header="Profit (USDT)" Width="SizeToHeader" MinWidth="140"
+                    <DataGridTemplateColumn Header="Profit (Quote)" Width="SizeToHeader" MinWidth="140"
                                             IsReadOnly="True" SortMemberPath="RealizedPnlQuote">
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
