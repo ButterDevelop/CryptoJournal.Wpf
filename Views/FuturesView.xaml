@@ -6,6 +6,7 @@
 
     <UserControl.Resources>
         <ui:PnlToBrushConverter x:Key="PnlToBrush"/>
+        <ui:SmartQtyConverter x:Key="SmartQtyConv"/>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>
 
@@ -100,7 +101,22 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTextColumn Header="Qty"         Binding="{Binding Quantity}"/>
+                <DataGridTemplateColumn Header="Qty" SortMemberPath="Quantity">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <TextBlock HorizontalAlignment="Center"
+                                       ui:SmartQtyAssist.EnableToggle="True"
+                                       ToolTip="{Binding Quantity}">
+                                <TextBlock.Text>
+                                    <MultiBinding Converter="{StaticResource SmartQtyConv}">
+                                        <Binding Path="Quantity"/>
+                                        <Binding Path="(ui:SmartQtyAssist.IsExpanded)" RelativeSource="{RelativeSource Self}"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Avg Entry"   Binding="{Binding AvgEntryPrice, StringFormat={}{0:C2}}"/>
                 <DataGridTextColumn Header="Leverage"    Binding="{Binding Leverage, StringFormat={}{0:0.#}x}"/>
                 <DataGridTextColumn Header="Margin"      Binding="{Binding Margin, StringFormat={}{0:C2}}"/>

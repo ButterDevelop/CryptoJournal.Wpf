@@ -1,4 +1,4 @@
-﻿<UserControl x:Class="CryptoJournal.Wpf.Views.TransactionsView"
+<UserControl x:Class="CryptoJournal.Wpf.Views.TransactionsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
@@ -43,6 +43,7 @@
         <ui:PnlToBrushConverter x:Key="PnlToBrush"/>
         <ui:BoolToVisibilityConverter x:Key="BoolVisConv"/>
         <ui:TxTypeDisplayConverter    x:Key="TxTypeDisplayConv"/>
+        <ui:SmartQtyConverter         x:Key="SmartQtyConv"/>
     </UserControl.Resources>
 
     <Grid Margin="12" Background="Transparent" KeyboardNavigation.TabNavigation="Local">
@@ -353,7 +354,16 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate>
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,2">
-                                    <TextBlock Text="{Binding Quantity}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                                    <TextBlock FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"
+                                               ui:SmartQtyAssist.EnableToggle="True"
+                                               ToolTip="{Binding Quantity}">
+                                        <TextBlock.Text>
+                                            <MultiBinding Converter="{StaticResource SmartQtyConv}">
+                                                <Binding Path="Quantity"/>
+                                                <Binding Path="(ui:SmartQtyAssist.IsExpanded)" RelativeSource="{RelativeSource Self}"/>
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
                                     <TextBlock Text="{Binding Price, StringFormat=@ {0:C2}}" FontSize="12" Foreground="#999" HorizontalAlignment="Center"/>
                                 </StackPanel>
                             </DataTemplate>
