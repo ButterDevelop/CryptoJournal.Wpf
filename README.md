@@ -2,7 +2,7 @@
 
 A secure, offline-first desktop application designed for serious cryptocurrency traders who want complete control over their portfolio data. Track spot transactions, manage futures positions, analyze PnL, build take-profit scenarios, and document your strategic moves - all without needing an exchange API connection.
 
-![Demo](./demo.gif)
+https://github.com/user-attachments/assets/5c1bc9f5-d1d2-4473-983f-716bc6e66eb0
 
 ## 🌟 Why CryptoJournal?
 Unlike cloud-based portfolio trackers, CryptoJournal functions entirely offline and locally. Your transaction history, scenarios, and chart annotations stay natively on your hard drive inside `CryptoJournal_data`. It queries public market data endpoints purely to fetch live prices and candlesticks.
