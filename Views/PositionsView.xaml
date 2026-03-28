@@ -92,7 +92,7 @@
                 <DataGridTextColumn Header="Market Value"      Binding="{Binding MarketValueQuote, StringFormat={}{0:C2}}"
                                     SortMemberPath="MarketValueQuote" SortDirection="Descending"/>
 
-                <DataGridTemplateColumn Header="Unrealized PnL">
+                <DataGridTemplateColumn Header="Unrealized PnL" SortMemberPath="UnrealizedPnlQuote">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding UnrealizedPnlQuote, StringFormat={}{0:C2}}"
@@ -103,7 +103,7 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Unrealized %" >
+                <DataGridTemplateColumn Header="Unrealized %" SortMemberPath="UnrealizedPnlPct">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding UnrealizedPnlPct, StringFormat={}{0:P2}, TargetNullValue=—}"

@@ -1,5 +1,5 @@
 #define MyAppName "CryptoJournal"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "ButterDevelop"
 #define MyAppURL "https://github.com/ButterDevelop/CryptoJournal.Wpf"
 #define MyAppExeName "CryptoJournal.Wpf.exe"
@@ -15,8 +15,8 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 
-; По умолчанию - Program Files, но пользователь сможет выбрать сам.
-; В current-user режиме {autopf} автоматически станет userpf.
+; By default - Program Files, but the user can choose it himself
+; In current-user mode, {autopf} will automatically become userpf
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 
@@ -30,8 +30,8 @@ WizardStyle=modern
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 
-; По умолчанию - admin install, но пользователь сможет выбрать
-; "только для меня" через встроенный диалог.
+; Default is admin install, but user will be able to choose
+; "just for me" via built-in dialog
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
 
@@ -44,7 +44,7 @@ VersionInfoDescription=CryptoJournal installer
 VersionInfoProductName={#MyAppName}
 VersionInfoProductVersion={#MyAppVersion}
 
-; Когда настроишь подпись:
+; if there is a signature here:
 ; SignTool=mycustom
 ; SignedUninstaller=yes
 

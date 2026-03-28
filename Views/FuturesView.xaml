@@ -126,7 +126,7 @@
                 <DataGridTextColumn Header="SL"          Binding="{Binding StopLoss, StringFormat={}{0:C2}, TargetNullValue=—}"/>
 
                 <!-- Unrealized Profit/Loss -->
-                <DataGridTemplateColumn Header="uPnL">
+                <DataGridTemplateColumn Header="uPnL" SortMemberPath="UnrealizedPnl">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding UnrealizedPnl, StringFormat={}{0:C2}, TargetNullValue=—}"
@@ -138,7 +138,7 @@
                 </DataGridTemplateColumn>
 
                 <!-- Return on Equity Percentage -->
-                <DataGridTemplateColumn Header="ROE %">
+                <DataGridTemplateColumn Header="ROE %" SortMemberPath="RoePct">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding RoePct, StringFormat={}{0:P2}, TargetNullValue=—}"
