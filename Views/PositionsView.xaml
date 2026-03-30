@@ -88,6 +88,8 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
                 <DataGridTextColumn Header="CostBasis (quote)" Binding="{Binding CostBasisQuote, StringFormat={}{0:C2}}"/>
+                <DataGridTextColumn Header="Avg Buy"           Binding="{Binding AvgBuyPrice, StringFormat={}{0:C2}, TargetNullValue=—}"
+                                    SortMemberPath="AvgBuyPrice"/>
                 <DataGridTextColumn Header="Mark"              Binding="{Binding MarkPriceQuote, StringFormat={}{0:C2}}"/>
                 <DataGridTextColumn Header="Market Value"      Binding="{Binding MarketValueQuote, StringFormat={}{0:C2}}"
                                     SortMemberPath="MarketValueQuote" SortDirection="Descending"/>

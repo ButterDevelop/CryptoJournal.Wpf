@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CryptoJournal.Wpf.Domain.Models;
 using System.Windows.Media;
 
@@ -23,6 +23,10 @@ public partial class PositionRowVm : ObservableObject
     public string  Symbol         { get; } // stable key for matching updates
     public decimal Quantity       { get; } // position qty (base)
     public decimal CostBasisQuote { get; } // in quote currency (e.g., USDT)
+
+    /// <summary>Average buy price per unit (break-even price).</summary>
+    public decimal? AvgBuyPrice =>
+        Quantity > 0m ? CostBasisQuote / Quantity : null;
 
     // Source value that changes over time
     [ObservableProperty]

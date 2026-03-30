@@ -1,5 +1,5 @@
 #define MyAppName "CryptoJournal"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "ButterDevelop"
 #define MyAppURL "https://github.com/ButterDevelop/CryptoJournal.Wpf"
 #define MyAppExeName "CryptoJournal.Wpf.exe"
