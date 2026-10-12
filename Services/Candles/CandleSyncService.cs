@@ -154,7 +154,7 @@ public sealed class CandleSyncService
 
             var idx = await _cache.LoadIndexAsync(currentExchange, symbol, interval, ct);
             if (idx.FirstOpenTimeUtc is null)
-                return; // forward with epoch will fill it automatically
+                return; // Forward sync initializes an empty cache.
 
             var end = idx.FirstOpenTimeUtc.Value.AddMilliseconds(-1);
 
@@ -212,10 +212,6 @@ public sealed class CandleSyncService
         await BackfillAsync(exchange, symbol, interval, ct);
         await SyncForwardAsync(exchange, symbol, interval, ct);
     }
-
-    // =============================
-    // Fallback + pin logic
-    // =============================
 
     private async Task<string> GetPinnedOrPreferredExchangeAsync(string preferredExchange, string symbol, CancellationToken ct)
     {

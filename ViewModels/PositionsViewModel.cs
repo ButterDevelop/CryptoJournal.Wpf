@@ -64,7 +64,6 @@ public partial class PositionsViewModel : ObservableObject
 
             await _ui.InvokeAsync(() =>
             {
-                // Update all rows matching this symbol
                 foreach (var r in Positions.Where(p => sym.Equals(p.Symbol, StringComparison.OrdinalIgnoreCase)))
                 {
                     r.ApplyLastPrice(price);
@@ -73,13 +72,13 @@ public partial class PositionsViewModel : ObservableObject
         }
         catch
         {
-            // Never throw from async event handler
+            // Price updates are best effort.
         }
     }
 
     partial void OnSelectedPositionChanged(PositionRowVm? value)
     {
-        // IMPORTANT: If the table is currently being updated, ignore the temporary selection reset
+        // Refreshing the collection temporarily clears its selection.
         if (_isRefreshingPositions && value is null)
             return;
 
@@ -98,11 +97,9 @@ public partial class PositionsViewModel : ObservableObject
     {
         try
         {
-            // Upgrade only "Auto:" plans
             var upgraded = ScenarioEditor.TryUpgradeAutoPlanToAth(symbol, ath);
             if (!upgraded) return;
 
-            // If the currently selected position matches the symbol, reload editor on UI thread
             var selected = SelectedPosition;
             if (selected is null) return;
 
@@ -116,7 +113,7 @@ public partial class PositionsViewModel : ObservableObject
         }
         catch
         {
-            // Never throw from async event handler
+            // Price updates are best effort.
         }
     }
     
@@ -124,14 +121,12 @@ public partial class PositionsViewModel : ObservableObject
     {
         if (_suppressSelectionGuard) return;
 
-        // Ignore temporary selection drop while refreshing
         if (_isRefreshingPositions && value is null)
             return;
 
-        var old = selectedPosition; // backing field (old value)
+        var old = selectedPosition;
         if (ReferenceEquals(old, value)) return;
 
-        // If scenario editor is not open or nothing dirty, allow navigation.
         if (!ScenarioEditor.HasUnsavedChanges)
             return;
 
@@ -148,31 +143,26 @@ public partial class PositionsViewModel : ObservableObject
 
         var res = _confirm.Show(vm);
 
-        // Window closed -> cancel navigation (restore old selection)
         if (res is null)
         {
             RestoreOldSelection(old);
             return;
         }
 
-        // Save
         if (res.Value)
         {
             ScenarioEditor.SaveCommand.Execute(null);
 
-            // If save failed (validation error), keep editor open and cancel navigation
             if (ScenarioEditor.HasUnsavedChanges || !string.IsNullOrWhiteSpace(ScenarioEditor.ErrorText))
             {
                 RestoreOldSelection(old);
                 return;
             }
 
-            return; // allow navigation
+            return;
         }
 
-        // Discard
         ScenarioEditor.DiscardChanges();
-        // allow navigation
     }
 
     private void RestoreOldSelection(PositionRowVm? old)
@@ -198,7 +188,6 @@ public partial class PositionsViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(positions);
 
-        // Snapshot the input to avoid multiple enumeration and to keep a stable view of "current positions"
         var posList = positions as IList<PositionSnapshot> ?? positions.ToList();
 
         var currentSymbols = posList.Where(p => p.Quantity > 0m && !string.IsNullOrWhiteSpace(p.Symbol))
@@ -206,10 +195,8 @@ public partial class PositionsViewModel : ObservableObject
                                     .Distinct(StringComparer.OrdinalIgnoreCase)
                                     .ToList();
 
-        // 0) reconcile scenarios with new position sizes (sell/withdraw)
         var changed = ScenarioEditor.ReconcilePlansWithPositions(posList.AsReadOnly(), _transactionsVm.FillsSeq.ToList().AsReadOnly());
 
-        // if a scenario is currently open for the selected position, reload it (so that the legs are updated)
         if (SelectedPosition is not null &&
             changed.Any(s => s.Equals(SelectedPosition.Symbol, StringComparison.OrdinalIgnoreCase)))
         {
@@ -221,13 +208,8 @@ public partial class PositionsViewModel : ObservableObject
             }, DispatcherPriority.Background, ct);
         }
 
-        // Remember currently selected symbol so we can restore selection after repopulating the DataGrid
         var prevSymbol = SelectedPosition?.Symbol;
 
-        // ------------------------------------------------------------
-        // 1) Auto-create default scenario plans (only if a plan does NOT exist yet)
-        //    Default: IsPercentMode = true, one leg: 100% @ ATH
-        // ------------------------------------------------------------
         var symbolsNeedingPlan = currentSymbols.Where(sym => !_prevPositionSymbols.Contains(sym))
                                                .Where(sym => !ScenarioEditor.HasPlan(sym))
                                                .ToList();
@@ -240,7 +222,6 @@ public partial class PositionsViewModel : ObservableObject
 
         if (symbolsNeedingPlan.Count > 0)
         {
-            // Fetch ATH with limited concurrency to avoid spamming network / API
             using var gate = new SemaphoreSlim(initialCount: 4, maxCount: 4);
 
             var athTasks = symbolsNeedingPlan.Select(async sym =>
@@ -248,13 +229,11 @@ public partial class PositionsViewModel : ObservableObject
                 await gate.WaitAsync(ct).ConfigureAwait(false);
                 try
                 {
-                    // AthService returns decimal? in your Dashboard sample
                     var price = await _ath.GetAthOrLastAsync(sym, ct).ConfigureAwait(false);
                     return (Symbol: sym, Ath: price);
                 }
                 catch
                 {
-                    // Ignore transient errors (network, missing data, etc.)
                     return (Symbol: sym, Ath: null);
                 }
                 finally
@@ -274,7 +253,6 @@ public partial class PositionsViewModel : ObservableObject
                 if (ath is null || ath.Value <= 0m)
                     continue;
 
-                // Race protection: the plan might have appeared while ATH tasks were running
                 if (ScenarioEditor.HasPlan(sym))
                     continue;
 
@@ -285,17 +263,13 @@ public partial class PositionsViewModel : ObservableObject
                 anyAdded = true;
             }
 
-            // Persist once (avoid saving JSON per symbol)
             if (anyAdded)
                 ScenarioEditor.SavePlans();
 
-            // if just created a default plan for the currently opened symbol,
-            // reload the editor so the user sees it immediately (no app restart needed)
             if (SelectedPosition is not null)
             {
                 var sym = SelectedPosition.Symbol.Trim().ToUpperInvariant();
 
-                // reload only if editor is open for this symbol and still empty
                 if (ScenarioEditor.Symbol is not null &&
                     sym.Equals(ScenarioEditor.Symbol.Trim().ToUpperInvariant(), StringComparison.OrdinalIgnoreCase) &&
                     ScenarioEditor.Legs.Count == 0)
@@ -308,12 +282,7 @@ public partial class PositionsViewModel : ObservableObject
             }
         }
 
-        // ------------------------------------------------------------
-        // 2) Build row VMs and refresh the UI collection
-        // ------------------------------------------------------------
         var rows = posList.Select(p => new PositionRowVm(p)).ToList();
-
-        bool restoredSelection = false;
 
         _isRefreshingPositions = true;
         try
@@ -324,7 +293,6 @@ public partial class PositionsViewModel : ObservableObject
                 foreach (var r in rows)
                     Positions.Add(r);
 
-                // Try to restore selection by symbol so the scenario panel stays open
                 if (!string.IsNullOrWhiteSpace(prevSymbol))
                 {
                     var match = Positions.FirstOrDefault(p =>
@@ -332,8 +300,7 @@ public partial class PositionsViewModel : ObservableObject
 
                     if (match is not null)
                     {
-                        SelectedPosition  = match; // prevents "flashing"
-                        restoredSelection = true;
+                        SelectedPosition = match; // prevents "flashing"
                     }
                 }
             }, DispatcherPriority.DataBind, ct);
@@ -343,8 +310,6 @@ public partial class PositionsViewModel : ObservableObject
             _isRefreshingPositions = false;
         }
 
-        // If the previously selected position no longer exists in the new list, clear selection.
-        // This also handles the case where prevSymbol was null (e.g. when all positions disappear).
         var currentSelected = SelectedPosition;
         if (currentSelected is not null &&
             !Positions.Any(p => p.Symbol.Equals(currentSelected.Symbol, StringComparison.OrdinalIgnoreCase)))
@@ -355,9 +320,6 @@ public partial class PositionsViewModel : ObservableObject
             }, DispatcherPriority.DataBind, ct);
         }
 
-        // ------------------------------------------------------------
-        // 3) Load icons asynchronously and apply them on the UI thread
-        // ------------------------------------------------------------
         var distinctSymbols = rows.Select(r => r.Symbol)
                                   .Where(s => !string.IsNullOrWhiteSpace(s))
                                   .Select(s => s.Trim().ToUpperInvariant())
@@ -366,7 +328,6 @@ public partial class PositionsViewModel : ObservableObject
 
         _poll.SetSymbols(distinctSymbols);
 
-        // Optionally trigger ATH prefetch for all active symbols once
         foreach (var s in distinctSymbols)
             _ath.PrefetchAth(s, CancellationToken.None);
 

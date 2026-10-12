@@ -1,5 +1,7 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CryptoJournal.Wpf.Services.Updates;
+using CryptoJournal.Wpf.UI;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Reflection;
@@ -9,14 +11,25 @@ namespace CryptoJournal.Wpf.ViewModels;
 
 public partial class AboutViewModel : ObservableObject
 {
-    public string AppName     { get; } = "CryptoJournal.Wpf";
+    private readonly IUpdateService _updates;
+    private readonly IConfirmService _confirm;
+    private readonly string _currentVersion = GetCurrentVersion();
+    private UpdateInfo? _availableUpdate;
 
-    public string VersionText { get; } = BuildVersionText();
+    public AboutViewModel(IUpdateService updates, IConfirmService confirm)
+    {
+        _updates = updates;
+        _confirm = confirm;
+        VersionText = $"Version {_currentVersion}";
+        _ = CheckForUpdatesAsync();
+    }
 
-    public string RepoUrl     { get; } = "https://github.com/ButterDevelop/CryptoJournal.Wpf"; 
+    public string AppName { get; } = "CryptoJournal.Wpf";
+    public string VersionText { get; }
+    public string RepoUrl { get; } = "https://github.com/ButterDevelop/CryptoJournal.Wpf";
 
     public string ShortDescription { get; } =
-        "A simple spot portfolio journal for tracking transactions, positions, PnL and different scenarios.";
+        "A local journal for tracking spot and futures trades, positions, PnL, and exit scenarios.";
 
     public ObservableCollection<string> Features { get; } =
     [
@@ -33,15 +46,104 @@ public partial class AboutViewModel : ObservableObject
 
     public IReadOnlyList<string> UpcomingFeatures { get; } =
     [
-        "More exchanges / better symbol mapping",
-        "Price/ATH improvements and caching",
-        "Export / import improvements"
+        "More exchanges and better symbol mapping",
+        "Price and ATH improvements",
+        "Export and import improvements"
     ];
 
-    public string DonateUrl  { get; } = "https://nowpayments.io/donation/butterdevelop";
+    public string DonateUrl { get; } = "https://nowpayments.io/donation/butterdevelop";
 
     public string DonateText { get; } =
         "This app is free and open-source. If you find it useful, you can support development via donation.";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CheckForUpdatesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    private bool isCheckingForUpdates;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(CheckForUpdatesCommand))]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    private bool isInstallingUpdate;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(InstallUpdateCommand))]
+    private bool isUpdateAvailable;
+    [ObservableProperty] private string updateStatus = "Check GitHub for a new release.";
+    [ObservableProperty] private string installUpdateText = "Download and install";
+
+    private bool CanCheckForUpdates() => !IsCheckingForUpdates && !IsInstallingUpdate;
+
+    [RelayCommand(CanExecute = nameof(CanCheckForUpdates))]
+    private async Task CheckForUpdatesAsync()
+    {
+        IsCheckingForUpdates = true;
+        IsUpdateAvailable    = false;
+        UpdateStatus         = "Checking for updates...";
+
+        try
+        {
+            _availableUpdate = await _updates.CheckAsync(_currentVersion);
+            if (_availableUpdate is null)
+            {
+                UpdateStatus = "You are using the latest version.";
+                return;
+            }
+
+            IsUpdateAvailable = true;
+            InstallUpdateText = $"Download and install {_availableUpdate.Version}";
+            UpdateStatus      = $"Version {_availableUpdate.Version} is available.";
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = $"Could not check for updates: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
+    private bool CanInstallUpdate() =>
+        IsUpdateAvailable && !IsCheckingForUpdates && !IsInstallingUpdate;
+
+    [RelayCommand(CanExecute = nameof(CanInstallUpdate))]
+    private async Task InstallUpdateAsync()
+    {
+        var update = _availableUpdate;
+        if (update is null) return;
+
+        var confirmed = await _confirm.ConfirmAsync(
+            "Install update",
+            $"Download and install CryptoJournal {update.Version}? The application will close before setup starts.",
+            "Install",
+            "Cancel");
+        if (!confirmed) return;
+
+        IsInstallingUpdate = true;
+        UpdateStatus       = $"Downloading CryptoJournal {update.Version}...";
+
+        try
+        {
+            var installerPath = await _updates.DownloadAsync(update);
+            (Application.Current as App)?.PrepareForUpdate();
+            Process.Start(new ProcessStartInfo(installerPath)
+            {
+                Arguments       = "/CLOSEAPPLICATIONS",
+                UseShellExecute = true
+            });
+
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            UpdateStatus = $"Could not install the update: {ex.Message}";
+        }
+        finally
+        {
+            IsInstallingUpdate = false;
+        }
+    }
 
     [RelayCommand]
     private void OpenRepo() => OpenUrl(RepoUrl);
@@ -63,10 +165,7 @@ public partial class AboutViewModel : ObservableObject
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         }
-        catch
-        {
-            // ignore
-        }
+        catch { }
     }
 
     private static void CopyToClipboard(string? text)
@@ -77,21 +176,19 @@ public partial class AboutViewModel : ObservableObject
         {
             Clipboard.SetText(text);
         }
-        catch
-        {
-            // ignore
-        }
+        catch { }
     }
 
-    private static string BuildVersionText()
+    private static string GetCurrentVersion()
     {
-        var asm = Assembly.GetExecutingAssembly();
+        var assembly = Assembly.GetExecutingAssembly();
+        var informationalVersion = assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+            .InformationalVersion;
 
-        var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-        if (!string.IsNullOrWhiteSpace(info))
-            return $"Version {info}";
+        if (!string.IsNullOrWhiteSpace(informationalVersion))
+            return informationalVersion;
 
-        var ver = asm.GetName().Version?.ToString();
-        return string.IsNullOrWhiteSpace(ver) ? "Version unknown" : $"Version {ver}";
+        return assembly.GetName().Version?.ToString() ?? "unknown";
     }
 }

@@ -34,7 +34,6 @@ public partial class TradeFillRowVm : ObservableObject
             if (Equals(_fill, value)) return;
             _fill = value;
 
-            // Trigger UI updates for all computed properties
             OnPropertyChanged(nameof(Id));
             OnPropertyChanged(nameof(TimeUtc));
             OnPropertyChanged(nameof(Type));
@@ -55,7 +54,6 @@ public partial class TradeFillRowVm : ObservableObject
     internal bool IsSymbolDirty => _symbolDirty;
     internal void ClearSymbolDirty() => _symbolDirty = false;
 
-    // Editable DataGrid Columns
     public Guid Id => Fill.Id;
 
     public DateTimeOffset TimeUtc
@@ -167,7 +165,6 @@ public partial class TradeFillRowVm : ObservableObject
     {
         var list = Attachments.Select(a => a.Filename).ToList();
         
-        // Prevent circular updates by comparing with existing attachments
         var current = Fill.Attachments ?? [];
         if (current.SequenceEqual(list)) return;
 
@@ -175,10 +172,8 @@ public partial class TradeFillRowVm : ObservableObject
         OnAttachmentsChanged?.Invoke();
     }
 
-    // Read-only computed properties
     public decimal ValueQuote => Fill.ValueQuote;
 
-    // Read-only PnL properties (applicable only for Sell transactions)
     public decimal? RealizedPnlQuote => Fill.RealizedPnlQuote;
     public decimal? RealizedPnlPct => Fill.RealizedPnlPct;
 
@@ -229,7 +224,10 @@ public partial class TradeFillRowVm : ObservableObject
         {
             _imageStore.DeleteImage(vm.Filename);
         }
-        catch { /* Suppress physical deletion errors as a best-effort cleanup */ }
+        catch
+        {
+            // A failed file cleanup must not block removal from the transaction.
+        }
     }
 
     [RelayCommand]
@@ -243,10 +241,8 @@ public partial class TradeFillRowVm : ObservableObject
         w.Show();
     }
 
-    // Symbol Icon
     [ObservableProperty] private ImageSource? symbolIcon;
 
-    // Public API Methods
     public void UpdateSellPnl(decimal? pnl, decimal? pct)
         => Fill = Fill with { RealizedPnlQuote = pnl, RealizedPnlPct = pct };
 

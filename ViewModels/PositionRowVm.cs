@@ -55,7 +55,7 @@ public partial class PositionRowVm : ObservableObject
     {
         if (price <= 0m) return;
 
-        // skip micro-updates if you want less UI churn
+        // Avoid notifications when the displayed price did not change.
         if (MarkPriceQuote is not null && Math.Abs(MarkPriceQuote.Value - price) < 0.00000001m) return;
 
         MarkPriceQuote = price;

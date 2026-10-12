@@ -588,6 +588,15 @@
                 </Button>
             </StackPanel>
 
+            <TextBlock Text="{Binding ValidationMessage}"
+                       Visibility="{Binding HasValidationError, Converter={StaticResource BoolVisConv}}"
+                       Foreground="#EF5350"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center"
+                       HorizontalAlignment="Center"
+                       Margin="120,0"/>
+
             <!-- Environment Selection Button -->
             <Button HorizontalAlignment="Right"
                 VerticalAlignment="Bottom"

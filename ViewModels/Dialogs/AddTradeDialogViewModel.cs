@@ -15,7 +15,7 @@ namespace CryptoJournal.Wpf.ViewModels.Dialogs;
 
 public partial class AddTradeDialogViewModel : ObservableObject
 {
-    private readonly string _quote; // Quote currency identifier (e.g., USDT or USDC)
+    private readonly string _quote;
 
     private bool _syncing;
 
@@ -35,7 +35,6 @@ public partial class AddTradeDialogViewModel : ObservableObject
         Symbol    = _quote;
         Price     = 1m;
 
-        // Initialize default date and time fields
         var now     = DateTimeOffset.UtcNow;
         _syncing    = true;
         TimeUtcText = now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
@@ -74,7 +73,6 @@ public partial class AddTradeDialogViewModel : ObservableObject
 
     [ObservableProperty] private string    timeUtcText = "";
 
-    // Backing fields for the date and time popup editors
     [ObservableProperty] private DateTime? timeUtcDate;
     [ObservableProperty] private string    timeUtcTime = "00:00:00";
 
@@ -91,7 +89,6 @@ public partial class AddTradeDialogViewModel : ObservableObject
         }
     }
 
-    // Applies the selected date and time from the popup
     [RelayCommand]
     private void ApplyPickedTime()
     {
@@ -107,10 +104,9 @@ public partial class AddTradeDialogViewModel : ObservableObject
         TimeUtcText = dto.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         _syncing = false;
 
-        IsTimePopupOpen = false; // Close the date/time picker popup
+        IsTimePopupOpen = false;
     }
 
-    // Retrieves the final UTC time upon confirmation
     public bool TryGetTimeUtc(out DateTime utc)
     {
         utc = default;
@@ -144,11 +140,9 @@ public partial class AddTradeDialogViewModel : ObservableObject
             "dd.MM.yyyy HH:mm:ss"
         };
 
-        // Prioritize strict date parsing formats (optimal for pasted text)
         if (DateTimeOffset.TryParseExact(input, formats, CultureInfo.InvariantCulture, styles, out dto))
             return true;
 
-        // Fallback to culture-invariant and local culture parsing
         if (DateTimeOffset.TryParse(input, CultureInfo.InvariantCulture, styles, out dto))
             return true;
 
@@ -171,8 +165,6 @@ public partial class AddTradeDialogViewModel : ObservableObject
             || TimeSpan.TryParse(s, CultureInfo.InvariantCulture, out time);
     }
 
-    // Trade fill properties
-
     [ObservableProperty] private TxType   type;
     [ObservableProperty] private string   symbol     = "";
     [ObservableProperty] private decimal  quantity;
@@ -186,7 +178,6 @@ public partial class AddTradeDialogViewModel : ObservableObject
     public bool IsQuoteSymbol =>
         string.Equals(Symbol?.Trim(), _quote, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Only OpenLong/OpenShort — allows entry of TP and SL.</summary>
     public bool IsFuturesOpenType =>
         Type is TxType.OpenLong or TxType.OpenShort;
 
@@ -220,11 +211,9 @@ public partial class AddTradeDialogViewModel : ObservableObject
         OnPropertyChanged(nameof(LeverageVisible));
         OnPropertyChanged(nameof(TpSlVisible));
 
-        // Default price to 1 for non-pricing transaction types
         if (!PriceIsRequired)
             Price = 1m;
 
-        // Reset futures-specific fields when switching to spot or flat types
         if (!IsFuturesType)
             Leverage = 1m;
 

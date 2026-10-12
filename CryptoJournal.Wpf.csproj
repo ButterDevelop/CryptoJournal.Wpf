@@ -7,6 +7,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>CryptoJournal.Wpf.ico</ApplicationIcon>
+    <!-- LiveCharts 2.0.4 brings WPF bridge assets whose package metadata only declares .NET Framework. -->
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
 
 	<AssemblyTitle>CryptoJournal</AssemblyTitle>
 	<Description>Cryptocurrency portfolio management app</Description>
@@ -14,7 +16,7 @@
 	<Product>CryptoJournal.Wpf</Product>
 	<Copyright>© ButterDevelop 2026</Copyright>
 
-	<Version>1.0.1</Version>
+	<Version>1.0.4</Version>
 
 	<RepositoryUrl>https://github.com/ButterDevelop/CryptoJournal.Wpf</RepositoryUrl>
 	<RepositoryType>git</RepositoryType>
@@ -29,6 +31,7 @@
 
   <ItemGroup>
     <None Remove="Assets\Icons\default_coin.png" />
+    <Compile Remove="tests\**\*.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,7 +40,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.0-rc5.4" />
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.WPF" Version="2.0.4" />
     <PackageReference Include="MaterialDesignColors" Version="5.3.1-ci1190" />
     <PackageReference Include="MaterialDesignThemes" Version="5.3.1-ci1190" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.1" />

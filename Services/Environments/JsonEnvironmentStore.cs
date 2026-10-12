@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text.Json;
+using CryptoJournal.Wpf.Storage.Common;
 
 namespace CryptoJournal.Wpf.Services.Environments;
 
@@ -11,9 +12,7 @@ internal sealed class JsonEnvironmentStore : IEnvironmentStore
 
     public JsonEnvironmentStore()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "CryptoJournal");
+        var dir = AppDataPaths.RootDir;
 
         Directory.CreateDirectory(dir);
         _path = Path.Combine(dir, "environments.json");
@@ -58,7 +57,7 @@ internal sealed class JsonEnvironmentStore : IEnvironmentStore
 
     public async Task SaveAsync(EnvironmentState state, CancellationToken ct = default)
     {
-        await using var fs = File.Create(_path);
-        await JsonSerializer.SerializeAsync(fs, state, _opt, ct);
+        AppDataPaths.EnsureDir(Path.GetDirectoryName(_path)!);
+        await AtomicFile.WriteJsonAsync(_path, state, _opt, ct);
     }
 }

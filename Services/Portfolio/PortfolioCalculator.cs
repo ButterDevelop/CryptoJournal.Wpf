@@ -68,7 +68,8 @@ public sealed class PortfolioCalculator : IPortfolioCalculator
             RealizedPnlQuote:       result.RealizedPnlQuote,
             EquityQuote:            equity,
             FuturesPositions:       futuresResult.Positions,
-            FuturesRealizedPnlQuote: futuresResult.RealizedPnlQuote
+            FuturesRealizedPnlQuote: futuresResult.RealizedPnlQuote,
+            Issues:                 result.Issues.Concat(futuresResult.Issues).ToList()
         );
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System.IO;
 using System.Text.Json;
+using CryptoJournal.Wpf.Storage.Common;
 
 namespace CryptoJournal.Wpf.Services.Exchanges;
 
@@ -15,10 +16,7 @@ public sealed class JsonSymbolExchangePinStore : ISymbolExchangePinStore
 
     public JsonSymbolExchangePinStore(string? path = null)
     {
-        _path = path ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "CryptoJournal",
-            "symbol_exchange_pins.json");
+        _path = path ?? Path.Combine(AppDataPaths.RootDir, "symbol_exchange_pins.json");
     }
 
     public async Task<string?> GetAsync(string symbol, CancellationToken ct = default)
@@ -89,12 +87,7 @@ public sealed class JsonSymbolExchangePinStore : ISymbolExchangePinStore
 
     private async Task SaveAsync(CancellationToken ct)
     {
-        var dir = Path.GetDirectoryName(_path)!;
-        Directory.CreateDirectory(dir);
-
-        var json = JsonSerializer.Serialize(_cache, JSON_SETTINGS);
-
-        await File.WriteAllTextAsync(_path, json, ct);
+        await AtomicFile.WriteJsonAsync(_path, _cache, JSON_SETTINGS, ct);
     }
 
     private static string NormalizeSymbol(string s)

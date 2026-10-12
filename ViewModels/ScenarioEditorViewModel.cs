@@ -29,7 +29,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
     public ObservableCollection<ScenarioLegVm> Legs { get; } = [];
 
-    public event Action<string>? ScenariosChanged; // symbol
+    public event Action<string>? ScenariosChanged;
 
     /// <summary>
     /// Event fired when the user clicks the close ('X') button in the UI.
@@ -44,9 +44,9 @@ public partial class ScenarioEditorViewModel : ObservableObject
     public decimal RemainingQty   => PositionQty - PlannedQty;
 
     private bool   _suppressRecalc;
-    private string _loadedSig = ""; // Original state snapshot for change detection
-    private bool   _loadedWasAuto;  // Indicates if the loaded plan was a system-generated default
-    private bool   _suppressDirty;  // Prevents false dirty state flags during internal data normalization
+    private string _loadedSig = "";
+    private bool   _loadedWasAuto;
+    private bool   _suppressDirty;
 
     private readonly HashSet<ScenarioLegVm> _trackedLegs = [];
 
@@ -55,10 +55,8 @@ public partial class ScenarioEditorViewModel : ObservableObject
         _store = store;
         _env   = env;
 
-        // Initialize the scenario store using the active environment
         _store.Load(_env.Current.Id);
 
-        // Subscribe to environment changes to reload scenarios accordingly
         _env.CurrentChanged += (_, __) => _store.Load(_env.Current.Id);
 
         Legs.CollectionChanged += Legs_CollectionChanged;
@@ -66,7 +64,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
     private void Legs_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        // Detach event listeners globally when a collection reset occurs (e.g., Clear())
         if (e.Action == NotifyCollectionChangedAction.Reset)
         {
             foreach (var l in _trackedLegs)
@@ -103,7 +100,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
     {
         if (_suppressRecalc) return;
 
-        // Validate and recalculate totals dynamically during active edits
         Recalc();
 
         if (_suppressDirty) return;
@@ -130,7 +126,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
     private string CaptureSignature()
     {
-        // Generate a stable, culture-invariant signature to track modifications
         var sb = new StringBuilder();
         sb.Append(IsPercentMode ? "1" : "0");
         sb.Append('|').Append(Legs.Count);
@@ -162,7 +157,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
     public void DiscardChanges()
     {
         if (Symbol is null) return;
-        OpenForPosition(Symbol, PositionQty); // reload from store, resets IsDirty
+        OpenForPosition(Symbol, PositionQty);
     }
 
     public bool EnsureDefaultPlan(string symbol, decimal positionQty, decimal? athPrice)
@@ -170,11 +165,9 @@ public partial class ScenarioEditorViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(symbol)) return false;
         if (positionQty <= 0) return false;
 
-        // Skip default creation if a plan already exists
         if (_store.TryGetPlan(symbol) is not null)
             return false;
 
-        // An All-Time High price is required as the default target
         var price = athPrice ?? 0m;
         if (price <= 0) return false;
 
@@ -186,7 +179,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
             [
                 new ScenarioLegDto
                 {
-                    InputAmount = 100m, // Allocate 100% of the position
+                    InputAmount = 100m,
                     TargetPrice = price,
                     Note        = "Auto: 100% @ ATH"
                 }
@@ -203,7 +196,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(symbol)) return false;
         if (positionQty <= 0) return false;
 
-        // Plan exists, skipping creation
         if (_store.TryGetPlan(symbol) is not null)
             return false;
 
@@ -216,7 +208,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
             [
                 new ScenarioLegDto
                 {
-                    InputAmount = 100m, // Allocate 100% of the position
+                    InputAmount = 100m,
                     TargetPrice = defaultTargetPrice,
                     Note        = "Auto: 100% at Take Profit"
                 }
@@ -226,7 +218,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
         _store.SetPlan(plan);
         _store.Save();
 
-        // Trigger UI updates to reflect the new scenario state
         ScenariosChanged?.Invoke(symbol);
         _store.NotifyScenariosChanged(symbol);
         return true;
@@ -250,7 +241,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
             [
                 new ScenarioLegDto
                 {
-                    InputAmount = 100m,   // Allocate 100% of the position
+                    InputAmount = 100m,
                     TargetPrice = athPrice,
                     Note        = "Auto: 100% @ ATH"
                 }
@@ -285,7 +276,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
         }
         else if ((symbol ?? "").Contains(':'))
         {
-            // Initialize new futures scenarios with a 100% close target
             IsPercentMode = true;
             Legs.Add(new ScenarioLegVm
             {
@@ -299,7 +289,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(HeaderTitle));
         OnPropertyChanged(nameof(HeaderSubtitle));
 
-        CaptureLoadedStateFromUi(); // IMPORTANT: mark clean after load
+        CaptureLoadedStateFromUi();
     }
 
     [RelayCommand]
@@ -330,13 +320,11 @@ public partial class ScenarioEditorViewModel : ObservableObject
         var plan = _store.TryGetPlan(symbol);
         if (plan is null) return false;
 
-        // Only upgrade the default auto plan (do not touch user plans)
         if (!plan.IsPercentMode) return false;
         if (plan.Legs is null || plan.Legs.Count != 1) return false;
 
         var leg = plan.Legs[0];
 
-        // Recognize "auto default" by a strict pattern
         if (leg.InputAmount != 100m) return false;
         if (string.IsNullOrWhiteSpace(leg.Note) || !leg.Note.StartsWith("Auto:", StringComparison.OrdinalIgnoreCase))
             return false;
@@ -401,7 +389,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(ErrorText))
             return;
 
-        // If user edited an auto plan, remove the "Auto:" marker even if they forgot to
         if (_loadedWasAuto && IsDirty && Legs.Count == 1)
         {
             var leg  = Legs[0];
@@ -437,7 +424,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
         _store.SetPlan(plan);
         _store.Save();
 
-        // After save, treat it as a user plan (not auto anymore).
         _loadedWasAuto = false;
 
         CaptureLoadedStateFromUi();
@@ -448,7 +434,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
     partial void OnIsPercentModeChanging(bool value)
     {
-        var oldMode = isPercentMode; // backing field
+        var oldMode = isPercentMode;
 
         if (oldMode == value) return;
         if (Symbol is null)   return;
@@ -464,9 +450,9 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 var x = leg.InputAmount;
                 if (x == 0) continue;
 
-                if (value) // new = percent (old was qty)
+                if (value)
                     leg.InputAmount = Round8(x / PositionQty * 100m);
-                else       // new = qty (old was percent)
+                else
                     leg.InputAmount = Round8(PositionQty * x / 100m);
             }
         }
@@ -482,7 +468,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
         if (!_suppressRecalc)
             Recalc();
 
-        // IMPORTANT: mark "dirty" because the mode itself is part of the plan
         if (!_suppressDirty)
             UpdateDirty();
 
@@ -497,14 +482,12 @@ public partial class ScenarioEditorViewModel : ObservableObject
     {
         var changed = new List<string>();
 
-        // symbol -> current qty
         var qtyBySymbol = positions.Where(p => !string.IsNullOrWhiteSpace(p.Symbol))
                                    .ToDictionary(
                                        p => p.Symbol.Trim().ToUpperInvariant(),
                                        p => p.Quantity,
                                        StringComparer.OrdinalIgnoreCase);
 
-        // Spot plans don't contain a colon (reserved for futures composite keys)
         var plans = _store.GetPlansSnapshot()
                           .Where(p => !(p.Symbol ?? "").Contains(':'))
                           .ToList();
@@ -518,7 +501,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
             qtyBySymbol.TryGetValue(sym, out var currentQty);
 
-            // If position disappeared -> remove plan
             if (currentQty <= EPS)
             {
                 if (_store.RemovePlan(sym))
@@ -526,7 +508,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // if plan has no base qty yet (old json) -> initialize
             if (plan.BaseQty <= EPS)
             {
                 plan.BaseQty = currentQty;
@@ -536,7 +517,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // If position increased -> just bump BaseQty up (don't touch legs)
             if (currentQty > plan.BaseQty + EPS)
             {
                 plan.BaseQty = currentQty;
@@ -546,17 +526,14 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // If position decreased -> consume legs by the sold delta
             if (currentQty < plan.BaseQty - EPS)
             {
                 var soldQty = plan.BaseQty - currentQty;
 
                 ConsumeFromPlan(plan, soldQty, plan.BaseQty);
 
-                // remove legs that became empty after consumption
                 plan.Legs = plan.Legs.Where(l => l.InputAmount > EPS).ToList();
 
-                // If no legs left -> remove plan entirely and stop
                 if (plan.Legs.Count == 0)
                 {
                     _store.RemovePlan(sym);
@@ -564,18 +541,15 @@ public partial class ScenarioEditorViewModel : ObservableObject
                     continue;
                 }
 
-                // For percent-mode: recalculate percentages based on the new (smaller) position qty
-                // so that the absolute planned amounts stay the same
                 if (plan.IsPercentMode)
                 {
                     foreach (var leg in plan.Legs)
                     {
-                        var absQty = plan.BaseQty * (leg.InputAmount / 100m); // absolute qty using OLD base
+                        var absQty = plan.BaseQty * (leg.InputAmount / 100m);
                         var newPct = currentQty <= EPS ? 0m : (absQty / currentQty) * 100m;
                         leg.InputAmount = Round8(newPct);
                     }
 
-                    // re-filter after recalculation (edge case: rounding could produce zeros)
                     plan.Legs = plan.Legs.Where(l => l.InputAmount > EPS).ToList();
 
                     if (plan.Legs.Count == 0)
@@ -597,7 +571,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
         if (changed.Count > 0)
             _store.Save();
 
-        // notify dashboard etc
         foreach (var s in changed.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             ScenariosChanged?.Invoke(s);
@@ -617,13 +590,11 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
         var changed = new List<string>();
 
-        // Build keyed map: "BTC:Long" / "BTC:Short" -> current open qty
         var qtyByKey = positions.ToDictionary(
             p => $"{p.Symbol.Trim().ToUpperInvariant()}:{p.Side}",
             p => p.Quantity,
             StringComparer.OrdinalIgnoreCase);
 
-        // Get ALL plans, filter to futures ones (those whose Symbol contains ':')
         var plans = _store.GetPlansSnapshot()
                           .Where(p => (p.Symbol ?? "").Contains(':'))
                           .ToList();
@@ -635,7 +606,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
             qtyByKey.TryGetValue(key, out var currentQty);
 
-            // Position closed entirely -> remove plan
             if (currentQty <= EPS)
             {
                 if (_store.RemovePlan(key))
@@ -643,7 +613,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // Init base qty on first sight
             if (plan.BaseQty <= EPS)
             {
                 plan.BaseQty = currentQty;
@@ -653,7 +622,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // Position increased (added to) -> bump base
             if (currentQty > plan.BaseQty + EPS)
             {
                 plan.BaseQty = currentQty;
@@ -663,7 +631,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // Position partially closed -> consume legs
             if (currentQty < plan.BaseQty - EPS)
             {
                 var closedQty = plan.BaseQty - currentQty;
@@ -730,7 +697,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // fully consumed
             if (soldQty >= legAbs - EPS)
             {
                 soldQty -= legAbs;
@@ -738,7 +704,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 continue;
             }
 
-            // partially consumed
             var remainingAbs = legAbs - soldQty;
             soldQty = 0m;
 
@@ -789,7 +754,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
             return;
         }
 
-        // some base checks
         foreach (var leg in Legs)
         {
             if (leg.InputAmount <= 0)
@@ -800,7 +764,6 @@ public partial class ScenarioEditorViewModel : ObservableObject
                 ErrorText = "Note is too big.";
         }
 
-        // sum check
         var planned = PlannedQty;
         if (planned > PositionQty + 0.00000001m)
             ErrorText = $"Planned qty ({planned}) exceeds position qty ({PositionQty}).";
@@ -827,7 +790,7 @@ public partial class ScenarioEditorViewModel : ObservableObject
 
 public partial class ScenarioLegVm : ObservableObject
 {
-    [ObservableProperty] private decimal inputAmount;  // qty or %
+    [ObservableProperty] private decimal inputAmount;
     [ObservableProperty] private decimal targetPrice;
     [ObservableProperty] private string  note         = string.Empty;
 }

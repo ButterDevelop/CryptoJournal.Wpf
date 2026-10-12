@@ -6,7 +6,6 @@ namespace CryptoJournal.Wpf.UI;
 
 public sealed class BoolToVisibilityConverter : IValueConverter
 {
-    // Converter parameters enable normal, inverted, or hidden visibility evaluation options
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         var flag = value is bool b && b;

@@ -3,6 +3,7 @@ using System.IO;
 using System.Net.Http;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using CryptoJournal.Wpf.Storage.Common;
 
 namespace CryptoJournal.Wpf.Services.CryptoIcon
 {
@@ -23,9 +24,7 @@ namespace CryptoJournal.Wpf.Services.CryptoIcon
         {
             _http      = http;
             _providers = providers.ToList();
-            _dir       = Path.Combine(
-                             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                             "CryptoJournal", "icons");
+            _dir       = Path.Combine(AppDataPaths.RootDir, "icons");
             Directory.CreateDirectory(_dir);
 
             DefaultIcon = LoadBitmapFromPackUri(DefaultCoinPng, decodePx: 32);

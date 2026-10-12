@@ -105,10 +105,11 @@
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Header="Unrealized %" SortMemberPath="UnrealizedPnlPct">
+                <DataGridTemplateColumn Header="Unrealized return" SortMemberPath="UnrealizedPnlPct">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding UnrealizedPnlPct, StringFormat={}{0:P2}, TargetNullValue=—}"
+                                       ToolTip="Return relative to the cost basis of the remaining position"
                                        Foreground="{Binding UnrealizedPnlPct, Converter={StaticResource PnlToBrush}}"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Center"/>

@@ -24,6 +24,12 @@ public partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool isLoading = true;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasError))]
+    private string? errorMessage;
+
+    public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
     public DashboardViewModel    DashboardVm    { get; }
     public TransactionsViewModel TransactionsVm { get; }
     public PositionsViewModel    PositionsVm    { get; }
@@ -92,12 +98,11 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             TransactionsVm.FillsView.CollectionChanged += (_, __) => RequestRecalc(withPrices: true);
 
-            // autosync in the background
             _autoSyncTask ??= Task.Run(() => AutoSyncLoopAsync(_autoSyncCts.Token));
         }
-        catch
+        catch (Exception ex)
         {
-            // do not care really about an exception here
+            ErrorMessage = ex.Message;
         }
         finally
         {
@@ -111,8 +116,13 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
         try
         {
+            ErrorMessage = null;
             await TransactionsVm.LoadAsync();
             await RecalculateAsync(withPrices: true);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
         }
         finally
         {
@@ -142,10 +152,10 @@ public partial class MainViewModel : ObservableObject, IDisposable
         {
             try
             {
-                await Task.Delay(350, ct); // debounce
+                await Task.Delay(350, ct);
                 await Application.Current.Dispatcher.InvokeAsync(() => RecalculateAsync(withPrices), System.Windows.Threading.DispatcherPriority.Background);
             }
-            catch (OperationCanceledException) { /* don't really need that exception */ }
+            catch (OperationCanceledException) { }
         }, ct);
     }
 
@@ -169,59 +179,63 @@ public partial class MainViewModel : ObservableObject, IDisposable
                         await _candleSync.EnsureDailyHistoryForAthAsync("binance", SymbolUtil.ToPair(sym, _env.Current.QuoteCurrency), ct);
                 }
 
-                // update the UI already on UI-thread
                 var op = Application.Current.Dispatcher.InvokeAsync(() => RecalculateAsync(withPrices: true));
                 await op.Task.Unwrap();
             }
             catch
             {
-                /* could be some connection problems or whatever */
+                // The next sync cycle will retry transient market-data failures.
             }
 
-            // once an hour is enough for daily/ATH
             await Task.Delay(TimeSpan.FromHours(1), ct);
         }
     }
 
     private async Task RecalculateAsync(bool withPrices)
     {
-        var fills = TransactionsVm.FillsSeq.ToList();
-        Dictionary<string, decimal>? marks = null;
+        await _recalcGate.WaitAsync();
 
-        string quote = _env.Current.QuoteCurrency;
-
-        if (withPrices)
+        try
         {
-            var bases = fills
-                .Select(f => f.Symbol)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Select(s => SymbolUtil.NormalizeBase(s, quote))   // BTCUSDT -> BTC, btc -> BTC
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            var fills = TransactionsVm.FillsSeq.ToList();
+            Dictionary<string, decimal>? marks = null;
 
-            // prices are needed only for non-quote assets
-            var pairs = bases
-                .Where(b => !SymbolUtil.IsQuote(b, quote))
-                .Select(b => SymbolUtil.ToPair(b, quote))          // BTC -> BTCUSDT
-                .ToList();
+            string quote = _env.Current.QuoteCurrency;
 
-            var pairMarks = await _prices.GetLastPricesAsync(pairs);
+            if (withPrices)
+            {
+                var bases = fills
+                    .Select(f => f.Symbol)
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => SymbolUtil.NormalizeBase(s, quote))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
 
-            // convert back to base->price
-            marks = pairMarks.ToDictionary(
-                kv => SymbolUtil.NormalizeBase(kv.Key, quote),     // BTCUSDT -> BTC
-                kv => kv.Value,
-                StringComparer.OrdinalIgnoreCase);
+                var pairs = bases
+                    .Where(b => !SymbolUtil.IsQuote(b, quote))
+                    .Select(b => SymbolUtil.ToPair(b, quote))
+                    .ToList();
 
-            // if it is needed somewhere, it can be done explicitly
-            marks[quote] = 1m;
+                var pairMarks = await _prices.GetLastPricesAsync(pairs);
+
+                marks = pairMarks.ToDictionary(
+                    kv => SymbolUtil.NormalizeBase(kv.Key, quote),
+                    kv => kv.Value,
+                    StringComparer.OrdinalIgnoreCase);
+
+                marks[quote] = 1m;
+            }
+
+            var snapshot = _calc.Calculate(fills, marks);
+
+            await PositionsVm.SetPositionsAsync(snapshot.Positions);
+            await FuturesVm.SetPositionsAsync(snapshot.FuturesPositions);
+            await DashboardVm.UpdateAsync(snapshot, fills, marks, quote);
         }
-
-        var snapshot = _calc.Calculate(fills, marks);
-
-        await PositionsVm.SetPositionsAsync(snapshot.Positions);
-        await FuturesVm.SetPositionsAsync(snapshot.FuturesPositions);
-        await DashboardVm.UpdateAsync(snapshot, fills, marks, quote);
+        finally
+        {
+            _recalcGate.Release();
+        }
     }
 
     public void Dispose()

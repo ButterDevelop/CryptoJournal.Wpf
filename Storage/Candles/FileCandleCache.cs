@@ -14,7 +14,6 @@ public sealed class FileCandleCache : ICandleCache
 {
     private readonly IMarketDataClientResolver _resolver;
 
-    // Maintain granular locks per exchange/symbol/interval to prevent concurrent file or index corruption
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new(StringComparer.OrdinalIgnoreCase);
 
     public FileCandleCache(IMarketDataClientResolver resolver)
@@ -66,7 +65,6 @@ public sealed class FileCandleCache : ICandleCache
     {
         if (candlesUtcSorted.Count == 0) return;
 
-        // Validate chronological sorting
         for (int i = 1; i < candlesUtcSorted.Count; i++)
             if (candlesUtcSorted[i].OpenTimeUtc < candlesUtcSorted[i - 1].OpenTimeUtc)
                 throw new InvalidOperationException("Candles must be sorted by OpenTimeUtc ascending.");
@@ -103,7 +101,6 @@ public sealed class FileCandleCache : ICandleCache
 
         idx.Count += totalAdded;
 
-        // Update the All-Time High track upon any new candle inserts
         var maxHighCandle = candlesUtcSorted.OrderByDescending(c => c.High).First();
         if (idx.AthHigh is null || maxHighCandle.High > idx.AthHigh.Value)
         {
@@ -125,7 +122,6 @@ public sealed class FileCandleCache : ICandleCache
         if (candlesUtcSorted.Count == 0)
             return;
 
-        // Ensure strict chronological ascending order
         for (int i = 1; i < candlesUtcSorted.Count; i++)
         {
             if (candlesUtcSorted[i].OpenTimeUtc <= candlesUtcSorted[i - 1].OpenTimeUtc)
@@ -135,7 +131,6 @@ public sealed class FileCandleCache : ICandleCache
         var idx  = await LoadIndexAsync(exchange, symbol, interval, ct);
         var last = idx.LastOpenTimeUtc;
 
-        // Filter dataset to prevent duplicate candle entries
         var toWrite = last is null
             ? candlesUtcSorted
             : candlesUtcSorted.Where(c => c.OpenTimeUtc > last.Value).ToList();
@@ -153,17 +148,14 @@ public sealed class FileCandleCache : ICandleCache
         if (toWrite.Count == 0)
             return;
 
-        // Persist candles to storage chunked by month
         foreach (var group in toWrite.GroupBy(c => new { c.OpenTimeUtc.UtcDateTime.Year, c.OpenTimeUtc.UtcDateTime.Month }))
         {
             var first = group.First();
             var path  = CandlePathResolver.GetChunkFilePath(exchange, symbol, interval, first.OpenTimeUtc);
 
-            // Append to GZip file: open a FileStream and wrap it with a GZipStream
             var existing = await ReadChunkAllAsync(path, ct);
             var merged = existing.Concat(group).OrderBy(c => c.OpenTimeUtc).ToList();
 
-            // De-duplicate aggregated entries using their OpenTime
             merged = merged
                 .GroupBy(c => c.OpenTimeUtc)
                 .Select(g => g.Last())
@@ -270,18 +262,14 @@ public sealed class FileCandleCache : ICandleCache
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            // Priority 1: Attempt to load an existing index map (optimal fast path)
             var idx = await LoadIndexAsync(exchangeId, pair, interval, ct).ConfigureAwait(false);
             if (idx.Count > 0 && idx.AthHigh is not null && idx.AthHigh.Value > 0m)
                 return idx;
 
-            // Priority 2: Rebuild index from existing chunk files if the index map is missing or void
-            // This mitigates errors when files exist but the index file failed to generate properly
             var rebuilt = await TryRebuildIndexFromFilesAsync(exchangeId, pair, interval, ct).ConfigureAwait(false);
             if (rebuilt is not null && rebuilt.Count > 0 && rebuilt.AthHigh is not null && rebuilt.AthHigh.Value > 0m)
                 return rebuilt;
 
-            // Priority 3: Fetch historical candles from the assigned exchange API to initialize local storage
             IMarketDataClient client;
             try
             {
@@ -289,14 +277,11 @@ public sealed class FileCandleCache : ICandleCache
             }
             catch
             {
-                // Return the current (likely empty) dataset if the exchange adapter is not registered
                 return idx;
             }
 
-            // Paginates backwards chronically to backfill historical missing candles
-            // Market clients implicitly return recent candles when start and end parameters are null
             const int limitPerRequest = 1000;
-            const int maxTotalCandles = 50_000; // Hard cap limit to prevent out-of-memory errors and excessive bandwidth
+            const int maxTotalCandles = 50_000;
 
             DateTimeOffset? endUtc       = null;
             DateTimeOffset? lastEarliest = null;
@@ -322,14 +307,13 @@ public sealed class FileCandleCache : ICandleCache
                 catch (OperationCanceledException) { throw; }
                 catch
                 {
-                    // Terminate the build process upon encountering network or exchange API errors
+                    // Keep the candles already cached when backfilling fails.
                     break;
                 }
 
                 if (batch is null || batch.Count == 0)
                     break;
 
-                // Organize batch chronologically and ensure distinct OpenTimeUtc values
                 var ordered = batch.Where(c => c is not null)
                                    .GroupBy(c => c.OpenTimeUtc)
                                    .Select(g => g.Last())
@@ -339,28 +323,22 @@ public sealed class FileCandleCache : ICandleCache
                 if (ordered.Count == 0)
                     break;
 
-                // Commit changes to disk (Upsert implicitly handles chunk partitioning, indexing, and ATH tracking)
                 await UpsertAsync(exchangeId, pair, interval, ordered, ct).ConfigureAwait(false);
                 totalWritten += ordered.Count;
 
-                // Shift the pagination cursor backwards chronologically:
                 var earliest = ordered[0].OpenTimeUtc;
 
-                // Break iteration to prevent infinite loops if the exchange returns redundant data
                 if (lastEarliest is not null && earliest >= lastEarliest.Value)
                     break;
 
                 lastEarliest = earliest;
 
-                // Ask for candles strictly earlier than the earliest candle in this batch
                 endUtc = earliest.AddMilliseconds(-1);
 
-                // Terminate initialization if the exchange response is smaller than the requested limit
                 if (batch.Count < limitPerRequest)
                     break;
             }
 
-            // Refresh the in-memory index map following the complete build
             idx = await LoadIndexAsync(exchangeId, pair, interval, ct).ConfigureAwait(false);
             return idx;
         }
@@ -376,7 +354,6 @@ public sealed class FileCandleCache : ICandleCache
         string            interval,
         CancellationToken ct)
     {
-        // Scan physical chunk files and regenerate the internal index structure procedurally
         var dir = CandlePathResolver.GetSeriesDir(exchangeId, pair, interval);
         if (!Directory.Exists(dir))
             return null;
@@ -417,7 +394,6 @@ public sealed class FileCandleCache : ICandleCache
                 ? last
                 : (last > idx.LastOpenTimeUtc.Value ? last : idx.LastOpenTimeUtc);
 
-            // Recalculate and update the All-Time High relative to this specific chunk
             var maxHigh = list[0];
             for (int i = 1; i < list.Count; i++)
             {
@@ -435,7 +411,6 @@ public sealed class FileCandleCache : ICandleCache
         if (idx.Count == 0)
             return null;
 
-        // Persist the regenerated index map to disk to optimize future load times
         await SaveIndexAsync(idx, ct).ConfigureAwait(false);
         return idx;
     }

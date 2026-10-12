@@ -16,7 +16,6 @@ public sealed class FuturesEngine
         public decimal  Leverage;
         public decimal? TakeProfit;
         public decimal? StopLoss;
-        public decimal  WeightedCost => Qty * EntryPrice;
     }
 
     public FuturesResult Build(IReadOnlyList<TradeFill> fillsUtcAnyOrder,
@@ -25,20 +24,23 @@ public sealed class FuturesEngine
         var fills = fillsUtcAnyOrder
             .Where(f => f.Type is TxType.OpenLong or TxType.CloseLong
                                 or TxType.OpenShort or TxType.CloseShort)
-            .OrderBy(f => f.TimeUtc)
-            .ThenBy(f => f.Id)
+            .OrderBy(fill => fill, TradeFillChronologicalComparer.Instance)
             .ToList();
 
-        // Key composition: (SYMBOL, position side)
         var queues  = new Dictionary<(string, PositionSide), Queue<OpenLot>>(SymbolSideComparer.Instance);
         decimal realizedPnl = 0m;
         var realizedRows = new List<FuturesMatch>();
+        var issues       = new List<LedgerIssue>();
+        var invalidKeys  = new HashSet<(string, PositionSide)>(SymbolSideComparer.Instance);
 
         foreach (var f in fills)
         {
             var sym  = f.Symbol.Trim().ToUpperInvariant();
             var side = f.Type is TxType.OpenLong or TxType.CloseLong ? PositionSide.Long : PositionSide.Short;
             var key  = (sym, side);
+
+            if (invalidKeys.Contains(key))
+                continue;
 
             if (!queues.TryGetValue(key, out var q))
                 queues[key] = q = new Queue<OpenLot>();
@@ -54,20 +56,33 @@ public sealed class FuturesEngine
                     StopLoss   = f.StopLoss
                 });
             }
-            else // Handle CloseLong or CloseShort transactions
+            else
             {
                 var qtyToClose = f.Quantity;
                 var closePrice = f.Price;
+                var available  = q.Sum(lot => lot.Qty);
+
+                if (qtyToClose > available)
+                {
+                    issues.Add(new LedgerIssue(
+                        f.Id,
+                        sym,
+                        LedgerIssueKind.InsufficientFuturesQuantity,
+                        qtyToClose,
+                        available,
+                        $"{f.Type} requests {qtyToClose} {sym}, but only {available} is open."));
+                    invalidKeys.Add(key);
+                    continue;
+                }
 
                 while (qtyToClose > 0m && q.Count > 0)
                 {
                     var lot  = q.Peek();
                     var take = Math.Min(lot.Qty, qtyToClose);
 
-                    // PnL per 1 unit * take * leverage
                     decimal pnlPerUnit = side == PositionSide.Long
-                        ? closePrice - lot.EntryPrice   // long: profit when price goes up
-                        : lot.EntryPrice - closePrice;  // short: profit when price goes down
+                        ? closePrice - lot.EntryPrice
+                        : lot.EntryPrice - closePrice;
 
                     decimal pnl = pnlPerUnit * take - f.FeeQuote * (take / f.Quantity);
                     realizedPnl += pnl;
@@ -91,17 +106,16 @@ public sealed class FuturesEngine
             }
         }
 
-        // Synthesize open futures positions from the aggregated queue remnants
+        markPrices ??= new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+
         var positions = new List<FuturesPosition>();
         foreach (var ((sym, side), q) in queues)
         {
             if (q.Count == 0) continue;
 
-            // Compute volume-weighted average entry price
             decimal totalQty  = 0m;
             decimal totalCost = 0m;
             decimal totalMarginWeighted = 0m;
-            decimal leverageWeighted    = 0m;
             decimal? firstTp = null;
             decimal? firstSl = null;
 
@@ -110,29 +124,25 @@ public sealed class FuturesEngine
                 totalQty  += lot.Qty;
                 totalCost += lot.Qty * lot.EntryPrice;
                 totalMarginWeighted += (lot.Qty * lot.EntryPrice / lot.Leverage);
-                leverageWeighted    += lot.Qty * lot.Leverage;
 
-                // Inherit the Take-Profit/Stop-Loss targets from the oldest active lot
                 firstTp ??= lot.TakeProfit;
                 firstSl ??= lot.StopLoss;
             }
 
             if (totalQty <= 0m) continue;
 
-            var avgEntry  = totalCost / totalQty;
-            var avgLevg   = leverageWeighted / totalQty;
-            var margin    = totalMarginWeighted; // sum of (qty * price / lev) per lot
+            var avgEntry          = totalCost / totalQty;
+            var margin            = totalMarginWeighted;
+            var effectiveLeverage = margin > 0m
+                ? Math.Max(1m, totalCost / margin)
+                : 1m;
 
-            // Estimated liquidation price (simplified, isolated margin model):
-            // Long:  liq ≈ avgEntry * (1 - 1/leverage)
-            // Short: liq ≈ avgEntry * (1 + 1/leverage)
-            decimal? liqPrice = avgLevg > 1m
+            decimal? liqPrice = effectiveLeverage > 1m
                 ? side == PositionSide.Long
-                    ? avgEntry * (1m - 1m / avgLevg)
-                    : avgEntry * (1m + 1m / avgLevg)
+                    ? avgEntry * (1m - 1m / effectiveLeverage)
+                    : avgEntry * (1m + 1m / effectiveLeverage)
                 : null;
 
-            markPrices ??= new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
             markPrices.TryGetValue(sym, out var mp);
             decimal? mark = markPrices.ContainsKey(sym) ? mp : (decimal?)null;
 
@@ -156,7 +166,7 @@ public sealed class FuturesEngine
                 Side:             side,
                 Quantity:         totalQty,
                 AvgEntryPrice:    avgEntry,
-                Leverage:         avgLevg,
+                Leverage:         effectiveLeverage,
                 Margin:           margin,
                 LiquidationPrice: liqPrice,
                 TakeProfit:       firstTp,
@@ -171,7 +181,8 @@ public sealed class FuturesEngine
         return new FuturesResult(
             positions.OrderBy(p => p.Symbol).ThenBy(p => p.Side).ToList(),
             realizedRows,
-            realizedPnl);
+            realizedPnl,
+            issues);
     }
 
     private sealed class SymbolSideComparer : IEqualityComparer<(string, PositionSide)>
@@ -187,7 +198,8 @@ public sealed class FuturesEngine
 public sealed record FuturesResult(
     IReadOnlyList<FuturesPosition> Positions,
     IReadOnlyList<FuturesMatch>    Matches,
-    decimal                        RealizedPnlQuote
+    decimal                        RealizedPnlQuote,
+    IReadOnlyList<LedgerIssue>     Issues
 );
 
 public sealed record FuturesMatch(

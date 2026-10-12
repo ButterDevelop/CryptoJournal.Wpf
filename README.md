@@ -1,101 +1,133 @@
-# CryptoJournal.Wpf 📈
+# CryptoJournal
 
-A secure, offline-first desktop application designed for serious cryptocurrency traders who want complete control over their portfolio data. Track spot transactions, manage futures positions, analyze PnL, build take-profit scenarios, and document your strategic moves - all without needing an exchange API connection.
+CryptoJournal is a Windows desktop app for recording spot and linear futures trades.
+Transactions are entered manually and stored on the local machine. The app uses public
+exchange APIs for prices and candles; it does not connect to an exchange account or
+ask for API keys.
 
 https://github.com/user-attachments/assets/5c1bc9f5-d1d2-4473-983f-716bc6e66eb0
 
-## 🌟 Why CryptoJournal?
-Unlike cloud-based portfolio trackers, CryptoJournal functions entirely offline and locally. Your transaction history, scenarios, and chart annotations stay natively on your hard drive inside `CryptoJournal_data`. It queries public market data endpoints purely to fetch live prices and candlesticks.
+## Features
 
----
+- FIFO cost basis and realized PnL for spot trades
+- long and short futures positions with margin, unrealized PnL, and ROE
+- portfolio equity and asset allocation dashboard
+- take-profit and stop-loss scenarios
+- notes and image attachments for transactions
+- live prices and candles from Binance, Bybit, OKX, Kraken, and MEXC
+- local candle and icon caches
 
-## 🚀 Core Features
+Spot transactions support `Buy`, `Sell`, `Deposit`, `Withdraw`, and `Fee`. Futures
+transactions support `Open Long`, `Close Long`, `Open Short`, and `Close Short`.
 
-### 📊 Comprehensive Dashboard & Analytics
-Get an instant helicopter view of your portfolio's health:
-* **Real-Time Equity Calculation:** Automatically totals the value of your free cash (USDT/USDC/USD/whatever you want), active spot positions, and locked futures margins.
-* **Allocation Pie Chart:** Visually separates your portfolio into assets, accurately grouping live spot positions alongside futures margin + Unrealized PnL.
-* **PnL History Bars:** Visualizes both **Realized PnL** (locked-in trades) and **Unrealized PnL** (floating market value) across your entire trading history.
-* **Asset Overview:** Tracks current pricing against All-Time Highs (ATH) to instantly show how far assets have dropped or pumped.
+The unrealized return shown for a spot position is based on the cost basis of the
+remaining quantity. Realized proceeds from earlier sales are not part of that
+percentage. Futures leverage changes margin and ROE, but does not multiply absolute
+PnL. See [Accounting rules](docs/Accounting.md) for the formulas used by the app.
 
-### 💱 Supported Exchanges & Asset Icons
-CryptoJournal automatically enriches your portfolio data with live market information:
-* **Supported Integrations:** Out-of-the-box support for fetching live prices and historical candles from major exchanges including **Binance**, **Bybit**, **OKX**, **Kraken**, and **MEXC**. 
-* **Automatic Crypto Icons:** Visually identify your assets instantly. The app automatically fetches and caches high-quality cryptocurrency icons using the **CoinGecko API**, falling back to a default coin icon if an asset is obscure.
+Liquidation prices are estimates based on isolated margin. They do not include an
+exchange's maintenance-margin tiers, funding, or liquidation fees.
 
-### 💰 Spot & Margin Trading Engines
-CryptoJournal utilizes dual PnL engines to accurately calculate your taxes and performance independently:
+## Data and privacy
 
-**1. Spot Trading (FIFO Engine)**
-* Supports standard `Buy`, `Sell`, `Deposit`, `Withdraw`, and `Fee` transactions.
-* Implements rigorous **FIFO** (First-In, First-Out) cost-basis calculations to automatically pair partial sells with your oldest buy transactions, determining the exact realized profit.
+Application data is stored in:
 
-**2. Futures & Perpetual Contracts**
-* Full support for `Open Long`, `Close Long`, `Open Short`, and `Close Short`.
-* Calculates **Margin**, estimated **Liquidation Price**, and **ROE %** (Return on Equity) based on your custom input `Leverage`.
-* Safely isolates short-selling math, inverting PnL calculations exactly like a real exchange. 
+```text
+%LocalAppData%\CryptoJournal
+```
 
-### 📝 Scenario Planner (Take-Profit & Stop-Loss)
-Don't just track what happened; plan what you *will* do:
-* Create dynamic, multi-leg Exit Scenarios for any open spot or futures position.
-* Assign target prices and exact quantities (or percentage splits, e.g., Sell 50% at $100k, 50% at $150k).
-* As you log real `Sell` or `Close` transactions, the engine automatically **consumes and removes** matching legs from your scenario, seamlessly reconciling your planned actions with reality.
+This directory contains portfolios, settings, scenarios, attachments, and caches.
+Portfolio data is stored as JSON. Saves use a temporary file and retain the previous
+file as a `.bak` backup.
 
-### 📸 Transaction Attachments & Evidence
-A trading journal is incomplete without visual context:
-* **Attach Images:** Bind chart screenshots, technical analysis, or visual notes directly to any specific transaction.
-* **Clipboard Support:** Just hit `Ctrl+V` (or click Paste) in the UI to instantly embed the image from your clipboard as a high-quality PNG.
-* **Gallery Viewer:** Click any thumbnail to open a dedicated, floating, full-screen `ImageViewerWindow` to swipe between all attachments related to a particular trade.
-* **Auto-Cleanup:** Deleting a transaction automatically garbage-collects its images from your hard drive, preventing storage bloat.
+On the first launch after upgrading, CryptoJournal copies data from these older
+locations when they exist:
 
-### ⚡ Local-First Reliability & Caching
-* **No Database Setup:** Uses local JSON storage inside `CryptoJournal_data/`. 
-* **Public Market Data:** Connects directly with public WebSockets/Rest endpoints to fetch the latest Tickers, meaning **no API Keys** or sensitive permissions are ever required.
-* **Smart Icon Caching:** Downloaded crypto icons are permanently cached on your disk in `CryptoJournal_data/icons` to minimize API calls and ensure instant loading on subsequent runs.
-* **Disk-Backed Candle Cache:** Historical K-Line charts are chunked and cached locally to `.bin` files, massively reducing network requests and enabling instant chart loading upon app restart.
+```text
+CryptoJournal_data                 # next to the executable
+%AppData%\CryptoJournal
+```
 
----
+The old directories are not deleted. Keep them until the migrated portfolio has been
+checked.
 
-## 📥 Getting Started
+CryptoJournal sends requests only for public market data and coin icons. Transaction
+history and attachments are not uploaded by the application.
 
-### Prerequisites
-* Windows OS
-* [.NET 10.0 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) 
+## Installation
 
-### Installation
-1. Clone the repository to your local machine:
-   ```bash
-   git clone https://github.com/ButterDevelop/CryptoJournal.Wpf.git
-   ```
-2. Open the solution (`CryptoJournal.Wpf.sln`) in Visual Studio 2022 or JetBrains Rider.
-3. Set `CryptoJournal.Wpf` as the Startup Project.
-4. Build and Run! 
+Download `Setup_CryptoJournal_X.Y.Z.exe` from the
+[latest release](https://github.com/ButterDevelop/CryptoJournal.Wpf/releases/latest).
+The installer contains the .NET runtime and supports 64-bit Windows.
 
-> The app will automatically initialize a `CryptoJournal_data` folder in the same directory as the executable. All your portfolios, configurations, databases, and image attachments will securely reside there.
+Each release also includes a SHA-256 file. To verify a download in PowerShell:
 
----
+```powershell
+Get-FileHash .\Setup_CryptoJournal_X.Y.Z.exe -Algorithm SHA256
+```
 
-## 🛠 Tech Stack
+Compare the printed hash with the contents of the matching `.sha256` file. The
+installer is currently unsigned, so Windows SmartScreen may show an unknown-publisher
+warning.
 
-Under the hood, CryptoJournal is built with modern, performant C# patterns:
-* **C# / WPF** (Windows Presentation Foundation)
-* **.NET 10.0**
-* **MVVM Architecture** via `CommunityToolkit.Mvvm` (Source Generators)
-* **MaterialDesignThemes** for responsive, modern UI components, smooth transitions, and dark mode.
-* **LiveCharts2 (SkiaSharp)** for fluid, hardware-accelerated dashboard charting.
-* **Dependency Injection** (Microsoft.Extensions.Hosting) managing domain engines, storage, and market data services.
+CryptoJournal checks the latest public GitHub release when it starts. When an update
+is available, the Info tab can download the installer, verify its SHA-256 checksum,
+and run it over the existing installation. Portfolio data in
+`%LocalAppData%\CryptoJournal` is kept during the update.
 
----
+## Building from source
 
-## ❤️ Support & Contribution
+Requirements:
 
-**CryptoJournal** is built by developer who trade, for traders who want privacy. 
-The software is entirely free and open-source.
+- Windows
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
 
-If this journal saves you money, helps you nail a trade, or just keeps your mind organized, please consider starring the repository ⭐ or supporting the development!
+```powershell
+git clone https://github.com/ButterDevelop/CryptoJournal.Wpf.git
+cd CryptoJournal.Wpf
+dotnet build CryptoJournal.Wpf.slnx
+dotnet test CryptoJournal.Wpf.slnx
+```
 
-Donate with NOWPayments!
+The solution can also be opened in Visual Studio or JetBrains Rider.
 
-[![Donate with NOWPayments](https://nowpayments.io/images/logo/logo.svg)](https://nowpayments.io/donation/butterdevelop)
+## Building the installer
 
-*Developed by ButterDevelop.*
+Install [Inno Setup 6](https://jrsoftware.org/isinfo.php), then run:
+
+```powershell
+.\scripts\Build-Installer.ps1 -Version 1.0.4
+```
+
+The script creates a self-contained `win-x64` publish, compiles the installer, and
+writes both the installer and its checksum to `artifacts\installer`.
+
+## Releases
+
+GitHub Actions builds and tests pull requests and pushes to `main`. A tag in `vX.Y.Z`
+format also publishes a GitHub Release with the installer, checksum, and generated
+release notes.
+
+```powershell
+git tag v1.0.4
+git push origin v1.0.4
+```
+
+The tag supplies the version for both the application and installer. The release job
+rejects tags that do not match `vX.Y.Z`.
+
+## Technology
+
+- .NET 10 and WPF
+- CommunityToolkit.Mvvm
+- Microsoft.Extensions.Hosting
+- MaterialDesignThemes
+- LiveCharts2 and SkiaSharp
+- NUnit
+
+## License
+
+CryptoJournal is available under the [Apache License 2.0](LICENSE).
+
+If the project is useful to you, you can support its development through
+[NOWPayments](https://nowpayments.io/donation/butterdevelop).

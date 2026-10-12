@@ -7,5 +7,6 @@ public sealed record PortfolioSnapshot(
     decimal                          RealizedPnlQuote,
     decimal?                         EquityQuote,
     IReadOnlyList<FuturesPosition>   FuturesPositions,
-    decimal                          FuturesRealizedPnlQuote
+    decimal                          FuturesRealizedPnlQuote,
+    IReadOnlyList<LedgerIssue>       Issues
 );

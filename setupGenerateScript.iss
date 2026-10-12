@@ -1,9 +1,17 @@
 #define MyAppName "CryptoJournal"
-#define MyAppVersion "1.0.3"
+#ifndef MyAppVersion
+#define MyAppVersion "1.0.4"
+#endif
 #define MyAppPublisher "ButterDevelop"
 #define MyAppURL "https://github.com/ButterDevelop/CryptoJournal.Wpf"
 #define MyAppExeName "CryptoJournal.Wpf.exe"
-#define MyAppDataFolderName "CryptoJournal_data"
+#define MyAppDataFolderName "CryptoJournal"
+#ifndef MyPublishDir
+#define MyPublishDir ".\bin\publish\win-x64"
+#endif
+#ifndef MyOutputDir
+#define MyOutputDir ".\Output"
+#endif
 
 [Setup]
 AppId={{5E7D3D4C-6E22-4F54-8C9D-1E3BFEA8A8D1}
@@ -14,26 +22,34 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
+AppMutex=CryptoJournal-5E7D3D4C-6E22-4F54-8C9D-1E3BFEA8A8D1
 
 ; By default - Program Files, but the user can choose it himself
 ; In current-user mode, {autopf} will automatically become userpf
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+UsePreviousAppDir=yes
 
-OutputDir=.\Output
+OutputDir={#MyOutputDir}
 OutputBaseFilename=Setup_CryptoJournal_{#MyAppVersion}
 
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+CloseApplications=yes
+RestartApplications=no
 
-ArchitecturesAllowed=x64
-ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 
 ; Default is admin install, but user will be able to choose
 ; "just for me" via built-in dialog
 PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=dialog
+
+; The application can be installed for all users, while each Windows account keeps
+; its own portfolio and settings in that account's LocalAppData directory.
+UsedUserAreasWarning=no
 
 UninstallDisplayIcon={app}\{#MyAppExeName}
 DisableProgramGroupPage=yes
@@ -57,24 +73,26 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 english.AppMutexName=CryptoJournal
 english.DataFolderDeletePrompt=Also delete the "{#MyAppDataFolderName}" folder?%n%nYes - remove the program and its data.%nNo - remove only the program and keep the data.%nCancel - abort uninstall.
 english.DataFolderDeleteTitle=Remove application data
-english.DataFolderCreateInfo=The application data folder will be stored inside the selected installation folder.
+english.DataFolderCreateInfo=Application data will be stored in the current user's LocalAppData folder.
 english.DesktopIconTask=Create a desktop shortcut
+english.NewerVersionInstalled=CryptoJournal %1 is already installed. Uninstall it before installing an older version.
 
 ; ----- Russian -----
 russian.AppMutexName=CryptoJournal
 russian.DataFolderDeletePrompt=Также удалить папку "{#MyAppDataFolderName}"?%n%nДа - удалить программу и данные.%nНет - удалить только программу, данные оставить.%nОтмена - прервать удаление.
 russian.DataFolderDeleteTitle=Удаление данных приложения
-russian.DataFolderCreateInfo=Папка данных приложения будет храниться внутри выбранной папки установки.
+russian.DataFolderCreateInfo=Данные приложения будут храниться в LocalAppData текущего пользователя.
 russian.DesktopIconTask=Создать ярлык на рабочем столе
+russian.NewerVersionInstalled=Уже установлена более новая версия CryptoJournal %1. Удалите её перед установкой старой версии.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopIconTask}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: ".\bin\publish\win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MyPublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Dirs]
-Name: "{app}\{#MyAppDataFolderName}"
+Name: "{localappdata}\{#MyAppDataFolderName}"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
@@ -87,9 +105,26 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}
 var
   RemoveUserData: Boolean;
 
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  InstalledVersion: Int64;
+  SetupVersion: Int64;
+  InstalledFile: string;
+begin
+  Result := '';
+  InstalledFile := AddBackslash(WizardDirValue) + '{#MyAppExeName}';
+
+  if GetPackedVersion(InstalledFile, InstalledVersion) and
+     StrToVersion('{#MyAppVersion}', SetupVersion) and
+     (ComparePackedVersion(InstalledVersion, SetupVersion) > 0) then
+  begin
+    Result := FmtMessage(CustomMessage('NewerVersionInstalled'), [VersionToStr(InstalledVersion)]);
+  end;
+end;
+
 function GetUserDataDir: string;
 begin
-  Result := ExpandConstant('{app}\{#MyAppDataFolderName}');
+  Result := ExpandConstant('{localappdata}\{#MyAppDataFolderName}');
 end;
 
 function InitializeUninstall: Boolean;

@@ -14,13 +14,11 @@ public sealed class AthService
     private readonly ICandleCache              _cache;
     private readonly IEnvironmentService       _env;
 
-    // In-memory ATH cache keyed by environment, quote currency, and symbol
     private readonly ConcurrentDictionary<string, decimal>    _athByKey = new(StringComparer.OrdinalIgnoreCase);
 
-    // De-duplicate concurrent background fetch requests
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflight = new(StringComparer.OrdinalIgnoreCase);
 
-    public event Action<string, decimal>? AthUpdated; // Event triggered upon an ATH update, providing the symbol and its new value
+    public event Action<string, decimal>? AthUpdated;
 
     public AthService(IMarketDataClientResolver resolver, ICandleCache cache, IEnvironmentService env)
     {
@@ -41,11 +39,10 @@ public sealed class AthService
     /// <summary>
     /// Starts background ATH fetching for this symbol (fire-and-forget).
     /// When ATH becomes available, AthUpdated event is raised.
-    /// IMPORTANT: Avoid passing short-lived UI-bound CancellationTokens to background operations.
+    /// The cancellation token must remain valid for the lifetime of the background request.
     /// </summary>
     public void PrefetchAth(string symbol, CancellationToken ct = default)
     {
-        // Skip background execution if the caller's token is already canceled
         if (ct.IsCancellationRequested)
             return;
 
@@ -53,11 +50,9 @@ public sealed class AthService
         if (key.Length == 0)
             return;
 
-        // Skip network prefetch if a value is already cached
         if (_athByKey.ContainsKey(key))
             return;
 
-        // Enforce single concurrent execution for each specific key
         var lazy = _inflight.GetOrAdd(
             key,
             k => new Lazy<Task>(
@@ -66,19 +61,15 @@ public sealed class AthService
             )
         );
 
-        _ = lazy.Value; // Trigger background initialization as a fire-and-forget task
+        _ = lazy.Value;
     }
 
     private async Task PrefetchAthCoreAsync(string key, string symbol, CancellationToken ct)
     {
         try
         {
-            // Use a timeout so we don't keep hanging in background forever
-            // This is crucial for first run when the cache/index might be building
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(45));
 
-            // If ct is short-lived (UI refresh token), it will cancel too early
-            // Prefer passing CancellationToken.None or a long-lived app token
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, ct);
 
             var effectiveCt = linkedCts.Token;
@@ -87,21 +78,17 @@ public sealed class AthService
             if (ath is null || ath.Value <= 0m)
                 return;
 
-            // Store once and notify listeners.
             if (_athByKey.TryAdd(key, ath.Value))
                 AthUpdated?.Invoke(NormalizeSymbol(symbol), ath.Value);
         }
         catch (OperationCanceledException)
         {
-            // Ignore cancellations (timeout or external token)
         }
         catch
         {
-            // Ignore transient errors (network, rate limit, missing market, etc.)
         }
         finally
         {
-            // Allow future attempts (e.g., if cache becomes available later)
             _inflight.TryRemove(key, out _);
         }
     }
@@ -121,24 +108,19 @@ public sealed class AthService
     /// </summary>
     public async Task<decimal?> GetAthOrLastAsync(string symbol, CancellationToken ct = default)
     {
-        // 0) If ATH is already cached in memory, return it instantly
         var cached = TryGetCachedAth(symbol);
         if (cached is not null && cached.Value > 0m)
             return cached.Value;
 
-        // 1) Try ATH via index/cache (might still be null on first run)
         var ath = await GetAthAsync(symbol, ct).ConfigureAwait(false);
         if (ath is not null && ath.Value > 0m)
         {
-            // Store to memory cache and return
             _athByKey.TryAdd(MakeKey(symbol), ath.Value);
             return ath.Value;
         }
 
-        // 2) Kick off background prefetch so ATH appears later without blocking UI
         PrefetchAth(symbol, CancellationToken.None);
 
-        // 3) Fallback: last price across exchanges (fast)
         var quote      = _env.Current.QuoteCurrency;
         var marketPair = SymbolUtil.ToPair(symbol, quote);
 
@@ -170,7 +152,6 @@ public sealed class AthService
         if (exchanges is null || exchanges.Count == 0)
             return null;
 
-        // Try preferred exchange first (if specified)
         if (!string.IsNullOrWhiteSpace(preferredExchangeId))
         {
             var preferred = exchanges.FirstOrDefault(x =>
@@ -184,7 +165,6 @@ public sealed class AthService
             }
         }
 
-        // Fallback: try all exchanges in DI priority order
         foreach (var ex in exchanges)
         {
             ct.ThrowIfCancellationRequested();
@@ -226,7 +206,6 @@ public sealed class AthService
         var quote = (_env.Current.QuoteCurrency ?? "").Trim().ToUpperInvariant();
         if (quote.Length == 0) quote = "USDT";
 
-        // Key must include quote currency because env can change
         return $"{quote}|{symbol}|{INTERVAL}";
     }
 

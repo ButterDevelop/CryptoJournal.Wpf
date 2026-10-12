@@ -11,44 +11,64 @@ public sealed class JsonPortfolioStore : IPortfolioStore
 {
     private readonly IEnvironmentService _env;
     private readonly string              _dir;
-
-    private string _filePath = "";
+    private readonly SemaphoreSlim       _gate = new(1, 1);
 
     public JsonPortfolioStore(IEnvironmentService env)
+        : this(env, AppDataPaths.RootDir)
+    {
+    }
+
+    internal JsonPortfolioStore(IEnvironmentService env, string rootDirectory)
     {
         _env = env;
-        _dir = AppDataPaths.EnsureDir(Path.Combine(AppDataPaths.RootDir, "Portfolio"));
+        _dir = AppDataPaths.EnsureDir(Path.Combine(rootDirectory, "Portfolio"));
     }
 
     public async Task<IReadOnlyList<TradeFill>> LoadAsync(CancellationToken ct = default)
     {
-        RecalculateFilePath();
+        await _gate.WaitAsync(ct);
 
-        if (!File.Exists(_filePath))
-            return [];
+        try
+        {
+            var filePath = GetFilePath();
+            if (!File.Exists(filePath))
+                return [];
 
-        await using var fs = File.OpenRead(_filePath);
-        var data = await JsonSerializer.DeserializeAsync<List<TradeFill>>(fs, JsonUtil.Options, ct);
-        return data ?? [];
+            try
+            {
+                await using var stream = File.OpenRead(filePath);
+                var data = await JsonSerializer.DeserializeAsync<List<TradeFill>>(stream, JsonUtil.Options, ct);
+                return data ?? [];
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException($"Portfolio file contains invalid JSON: {filePath}", ex);
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
-     
+
     public async Task SaveAsync(IReadOnlyList<TradeFill> fills, CancellationToken ct = default)
     {
-        RecalculateFilePath();
+        ArgumentNullException.ThrowIfNull(fills);
+        await _gate.WaitAsync(ct);
 
-        var tmp = _filePath + ".tmp";
-
-        await using (var fs = File.Create(tmp))
+        try
         {
-            await JsonSerializer.SerializeAsync(fs, fills, JsonUtil.Options, ct);
+            await AtomicFile.WriteJsonAsync(GetFilePath(), fills, JsonUtil.Options, ct);
         }
-
-        File.Copy(tmp, _filePath, overwrite: true);
-        File.Delete(tmp);
+        finally
+        {
+            _gate.Release();
+        }
     }
 
-    private void RecalculateFilePath()
+    private string GetFilePath()
     {
-        _filePath = Path.Combine(AppDataPaths.EnsureDir(Path.Combine(_dir, "envs", _env.Current.Id)), "portfolio.json");
+        var environmentDirectory = AppDataPaths.EnsureDir(Path.Combine(_dir, "envs", _env.Current.Id));
+        return Path.Combine(environmentDirectory, "portfolio.json");
     }
 }

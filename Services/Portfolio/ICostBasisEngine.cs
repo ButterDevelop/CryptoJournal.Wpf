@@ -8,7 +8,8 @@ public interface ICostBasisEngine
 }
 
 public sealed record CostBasisResult(
-    IReadOnlyList<Lot>   LotsRemaining,
-    IReadOnlyList<Match> Matches,
-    decimal              RealizedPnlQuote
+    IReadOnlyList<Lot>         LotsRemaining,
+    IReadOnlyList<Match>       Matches,
+    decimal                    RealizedPnlQuote,
+    IReadOnlyList<LedgerIssue> Issues
 );

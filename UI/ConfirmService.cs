@@ -14,7 +14,7 @@ public sealed class ConfirmService : IConfirmService
 
     public Task<bool> ConfirmAsync(string header, string message, string confirmText = "OK", string cancelText = "Cancel", bool destructive = false)
     {
-        // Dialog instantiation mandates execution on the active UI thread.
+        // Dialogs must be opened on the UI thread.
         return Application.Current.Dispatcher.InvokeAsync(() =>
         {
             var dlg = _services.GetRequiredService<ConfirmDialog>();

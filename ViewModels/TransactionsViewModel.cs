@@ -4,6 +4,7 @@ using CryptoJournal.Wpf.Domain.Enums;
 using CryptoJournal.Wpf.Domain.Models;
 using CryptoJournal.Wpf.Services.CryptoIcon;
 using CryptoJournal.Wpf.Services.Environments;
+using CryptoJournal.Wpf.Services.Portfolio;
 using CryptoJournal.Wpf.Storage.Portfolio;
 using CryptoJournal.Wpf.UI;
 using CryptoJournal.Wpf.Views.Dialogs;
@@ -20,21 +21,10 @@ public sealed record TxTypeFilterItem(string Title, TxType? Value);
 
 public partial class TransactionsViewModel : ObservableObject
 {
-    private sealed class Lot
-    {
-        public decimal Qty;
-        public decimal Cost; // Total cost (including purchase fee) for this remaining quantity
-
-        public Lot(decimal qty, decimal cost)
-        {
-            Qty  = qty;
-            Cost = cost;
-        }
-    }
-
-    private readonly IEnvironmentService _env;
-    private readonly IPortfolioStore     _store;
-    private readonly IServiceProvider    _services;
+    private readonly IEnvironmentService      _env;
+    private readonly IPortfolioStore          _store;
+    private readonly IServiceProvider         _services;
+    private readonly TransactionPnlCalculator _pnlCalculator;
 
     public ObservableCollection<TradeFillRowVm> Rows      { get; } = [];
     public IEnumerable<TradeFill>               FillsSeq => Rows.Select(r => r.Fill);
@@ -53,7 +43,12 @@ public partial class TransactionsViewModel : ObservableObject
 
     [ObservableProperty] private bool isLocked = true;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasValidationError))]
+    private string? validationMessage;
+
     public bool IsUnlocked => !IsLocked;
+    public bool HasValidationError => !string.IsNullOrWhiteSpace(ValidationMessage);
 
     public event EventHandler? FillsChanged;
 
@@ -61,29 +56,30 @@ public partial class TransactionsViewModel : ObservableObject
     private readonly ILocalImageStore _imageStore;
 
     public TransactionsViewModel(
-        IEnvironmentService env,
-        IPortfolioStore     store,
-        IServiceProvider    services,
-        ICryptoIconCache    icons,
-        ILocalImageStore    imageStore)
+        IEnvironmentService      env,
+        IPortfolioStore          store,
+        IServiceProvider         services,
+        ICryptoIconCache         icons,
+        ILocalImageStore         imageStore,
+        TransactionPnlCalculator pnlCalculator)
     {
-        _env        = env;
-        _store      = store;
-        _services   = services;
-        _icons      = icons;
-        _imageStore = imageStore;
+        _env           = env;
+        _store         = store;
+        _services      = services;
+        _icons         = icons;
+        _imageStore    = imageStore;
+        _pnlCalculator = pnlCalculator;
 
-        // Initialize the collection view with default sorting and filtering
         FillsView = CollectionViewSource.GetDefaultView(Rows);
         FillsView.SortDescriptions.Clear();
         FillsView.SortDescriptions.Add(new SortDescription(nameof(TradeFillRowVm.TimeUtc), ListSortDirection.Descending));
+        FillsView.SortDescriptions.Add(new SortDescription(nameof(TradeFillRowVm.Id), ListSortDirection.Descending));
         FillsView.Filter = o => o is TradeFillRowVm r && PassesFilter(r);
 
         TypeFilters.Add(new TxTypeFilterItem("All", null));
         foreach (var t in Enum.GetValues<TxType>())
             TypeFilters.Add(new TxTypeFilterItem(TxTypeDisplayConverter.Format(t), t));
 
-        // Set default filter state
         SelectedTypeFilter = TypeFilters[0];
     }
 
@@ -155,126 +151,18 @@ public partial class TransactionsViewModel : ObservableObject
         RefreshFilters();
     }
 
-    private void RecomputeSellPnl()
+    private IReadOnlyList<LedgerIssue> RecomputeSellPnl()
     {
         var selectedId = Selected?.Id;
+        var calculation = _pnlCalculator.Calculate(FillsSeq.ToList());
 
-        // Track spot positions using FIFO logic per symbol
-        var lotsBySymbol = new Dictionary<string, Queue<Lot>>(StringComparer.OrdinalIgnoreCase);
-
-        // Track futures positions using FIFO logic per symbol and direction
-        var futuresLots = new Dictionary<(string sym, bool isLong), Queue<FutLot>>();
-
-        // Store calculated PnL results mapped by transaction ID
-        var res = new Dictionary<Guid, (decimal? pnl, decimal? pct)>();
-
-        foreach (var row in Rows.OrderBy(x => x.TimeUtc))
-        {
-            var f = row.Fill;
-
-            if (string.IsNullOrWhiteSpace(f.Symbol)) continue;
-
-            // Process Spot Transactions
-            if (f.Type == TxType.Buy)
-            {
-                if (f.Quantity <= 0m || f.Price <= 0m) continue;
-                var cost = (f.Quantity * f.Price) + f.FeeQuote;
-                if (!lotsBySymbol.TryGetValue(f.Symbol, out var q))
-                    lotsBySymbol[f.Symbol] = q = new Queue<Lot>();
-                q.Enqueue(new Lot(f.Quantity, cost));
-                continue;
-            }
-
-            if (f.Type == TxType.Sell)
-            {
-                if (f.Quantity <= 0m || f.Price <= 0m) { res[f.Id] = (null, null); continue; }
-                if (!lotsBySymbol.TryGetValue(f.Symbol, out var lots) || lots.Count == 0) { res[f.Id] = (null, null); continue; }
-
-                var sellQtyLeft    = f.Quantity;
-                decimal costBasisSold = 0m;
-
-                while (sellQtyLeft > 0m && lots.Count > 0)
-                {
-                    var lot = lots.Peek();
-                    var take = Math.Min(lot.Qty, sellQtyLeft);
-                    var portionCost = lot.Cost * (take / lot.Qty);
-                    costBasisSold += portionCost;
-                    lot.Qty  -= take;
-                    lot.Cost -= portionCost;
-                    sellQtyLeft -= take;
-                    if (lot.Qty <= 0m) lots.Dequeue();
-                }
-
-                if (sellQtyLeft > 0m) { res[f.Id] = (null, null); continue; }
-
-                var proceedsNet = (f.Quantity * f.Price) - f.FeeQuote;
-                var pnl         = proceedsNet - costBasisSold;
-                res[f.Id] = (pnl, costBasisSold > 0m ? pnl / costBasisSold : null);
-                continue;
-            }
-
-            // Process Futures Open Transactions
-            if (f.Type is TxType.OpenLong or TxType.OpenShort)
-            {
-                if (f.Quantity <= 0m || f.Price <= 0m) continue;
-                var key = (f.Symbol.Trim().ToUpperInvariant(), f.Type == TxType.OpenLong);
-                var lev = Math.Max(1m, f.Leverage);
-                if (!futuresLots.TryGetValue(key, out var q))
-                    futuresLots[key] = q = new Queue<FutLot>();
-                q.Enqueue(new FutLot(f.Quantity, f.Price, lev));
-                continue;
-            }
-
-            // Process Futures Close Transactions
-            if (f.Type is TxType.CloseLong or TxType.CloseShort)
-            {
-                if (f.Quantity <= 0m || f.Price <= 0m) { res[f.Id] = (null, null); continue; }
-
-                var isLong = f.Type == TxType.CloseLong;
-                var key    = (f.Symbol.Trim().ToUpperInvariant(), isLong);
-
-                if (!futuresLots.TryGetValue(key, out var lots) || lots.Count == 0) { res[f.Id] = (null, null); continue; }
-
-                var qtyLeft      = f.Quantity;
-                decimal pnlTotal = 0m;
-                decimal margin   = 0m;  // Track applied margin to calculate Return on Equity (ROE)
-
-                while (qtyLeft > 0m && lots.Count > 0)
-                {
-                    var lot  = lots.Peek();
-                    var take = Math.Min(lot.Qty, qtyLeft);
-
-                    decimal pnlUnit = isLong
-                        ? f.Price - lot.Entry   // Calculate profit for long positions
-                        : lot.Entry - f.Price;  // Calculate profit for short positions
-
-                    pnlTotal += pnlUnit * take * lot.Lev;
-                    margin   += take * lot.Entry / lot.Lev;
-
-                    lot.Qty -= take;
-                    if (lot.Qty <= 0m) lots.Dequeue();
-
-                    qtyLeft -= take;
-                }
-
-                pnlTotal -= f.FeeQuote;
-
-                // Handle edge case where closed quantity exceeds open quantity
-                if (qtyLeft > 0m) { res[f.Id] = (null, null); continue; }
-
-                res[f.Id] = (pnlTotal, margin > 0m ? pnlTotal / margin : null);
-                continue;
-            }
-        }
-
-        // Apply calculated PnL to respective rows
         foreach (var row in Rows)
         {
             var f = row.Fill;
             bool isCloseRow = f.Type is TxType.Sell or TxType.CloseLong or TxType.CloseShort;
 
-            if (isCloseRow && res.TryGetValue(f.Id, out var r))
-                row.UpdateSellPnl(r.pnl, r.pct);
+            if (isCloseRow && calculation.ByTransactionId.TryGetValue(f.Id, out var result))
+                row.UpdateSellPnl(result.RealizedPnlQuote, result.RealizedPnlPct);
             else
                 row.ClearSellPnlIfAny();
         }
@@ -282,7 +170,18 @@ public partial class TransactionsViewModel : ObservableObject
         if (selectedId is not null)
             Selected = Rows.FirstOrDefault(x => x.Id == selectedId);
 
+        ValidationMessage = FormatIssues(calculation.Issues);
         RefreshFilters();
+        return calculation.Issues;
+    }
+
+    private static string? FormatIssues(IReadOnlyList<LedgerIssue> issues)
+    {
+        if (issues.Count == 0)
+            return null;
+
+        var first = issues[0].Message;
+        return issues.Count == 1 ? first : $"{first} (+{issues.Count - 1} more)";
     }
 
     public async Task LoadAsync()
@@ -291,7 +190,7 @@ public partial class TransactionsViewModel : ObservableObject
 
         Rows.Clear();
 
-        foreach (var f in fills.OrderBy(x => x.TimeUtc))
+        foreach (var f in fills.OrderBy(fill => fill, TradeFillChronologicalComparer.Instance))
         {
             var row = new TradeFillRowVm(f, _imageStore);
             row.OnAttachmentsChanged = async () => 
@@ -320,7 +219,7 @@ public partial class TransactionsViewModel : ObservableObject
         {
             ImageSource? icon = null;
             try { icon = await _icons.GetAsync(sym, ct); }
-            catch { /* don't really care about the exception */ }
+            catch { /* Icons are optional. */ }
 
             if (icon is null) continue;
 
@@ -332,12 +231,16 @@ public partial class TransactionsViewModel : ObservableObject
 
     public async Task SaveAsync()
     {
-        await _store.SaveAsync(FillsSeq.OrderBy(x => x.TimeUtc).ToList());
+        await _store.SaveAsync(FillsSeq
+            .OrderBy(fill => fill, TradeFillChronologicalComparer.Instance)
+            .ToList());
     }
 
     public async Task CommitEditsAsync()
     {
-        RecomputeSellPnl();
+        var issues = RecomputeSellPnl();
+        if (issues.Count > 0)
+            return;
 
         var dirtyRows = Rows.Where(r => r.IsSymbolDirty).ToList();
 
@@ -397,7 +300,15 @@ public partial class TransactionsViewModel : ObservableObject
 
             _ = WarmupIconsAsync(); // Check if we need to load a new coin icon
 
-            RecomputeSellPnl();
+            var issues = RecomputeSellPnl();
+            if (issues.Count > 0)
+            {
+                var validationMessage = ValidationMessage;
+                Rows.Remove(row);
+                RecomputeSellPnl();
+                ValidationMessage = validationMessage;
+                return;
+            }
 
             // Refresh view to apply active filters and sorting to the new item
             RefreshFilters();
@@ -451,19 +362,5 @@ public partial class TransactionsViewModel : ObservableObject
         OnPropertyChanged(nameof(IsUnlocked));
         AddTradeCommand.NotifyCanExecuteChanged();
         RemoveFillCommand.NotifyCanExecuteChanged();
-    }
-}
-
-internal sealed class FutLot
-{
-    public decimal Qty;
-    public decimal Entry;
-    public decimal Lev;
-
-    public FutLot(decimal qty, decimal entry, decimal lev)
-    {
-        Qty   = qty;
-        Entry = entry;
-        Lev   = lev;
     }
 }

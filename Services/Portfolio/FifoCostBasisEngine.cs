@@ -6,6 +6,29 @@ namespace CryptoJournal.Wpf.Services.Portfolio;
 
 public sealed class FifoCostBasisEngine : ICostBasisEngine
 {
+    private sealed class OpenLot
+    {
+        public required Guid           LotId;
+        public required Guid           SourceFillId;
+        public required DateTimeOffset TimeUtc;
+        public required string         Symbol;
+        public required decimal        QtyRemaining;
+        public required decimal        Price;
+        public required decimal        FeeQuoteAllocated;
+
+        public Lot ToSnapshot()
+        {
+            return new Lot(
+                LotId,
+                SourceFillId,
+                TimeUtc,
+                Symbol,
+                QtyRemaining,
+                Price,
+                FeeQuoteAllocated);
+        }
+    }
+
     private readonly IEnvironmentService _env;
 
     public FifoCostBasisEngine(IEnvironmentService env)
@@ -16,21 +39,25 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
     public CostBasisResult Build(IReadOnlyList<TradeFill> fillsUtcAnyOrder)
     {
         var fills = fillsUtcAnyOrder
-            .OrderBy(f => f.TimeUtc)
-            .ThenBy(f => f.Id)
+            .OrderBy(fill => fill, TradeFillChronologicalComparer.Instance)
             .ToList();
 
-        // Maintain chronologically ordered (FIFO) lots per symbol
-        var queues  = new Dictionary<string, Queue<Lot>>(StringComparer.OrdinalIgnoreCase);
+        var queues  = new Dictionary<string, Queue<OpenLot>>(StringComparer.OrdinalIgnoreCase);
         var matches = new List<Match>();
+        var issues  = new List<LedgerIssue>();
+        var invalidSymbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         decimal realized = 0m;
 
         foreach (var f in fills)
         {
             var symbol = f.Symbol.Trim().ToUpperInvariant();
+
+            if (invalidSymbols.Contains(symbol))
+                continue;
+
             if (!queues.TryGetValue(symbol, out var q))
             {
-                q = new Queue<Lot>();
+                q = new Queue<OpenLot>();
                 queues[symbol] = q;
             }
 
@@ -39,21 +66,19 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                 case TxType.Buy:
                 case TxType.Deposit:
                     {
-                        // Standard Buy or Deposit operations instantiate new lots.
-                        // Commensurate Quote fees are allocated entirely into the lot, establishing total cost basis.
-
                         if (string.Equals(symbol, _env.Current.QuoteCurrency, StringComparison.OrdinalIgnoreCase))
                             break;
 
-                        var lot = new Lot(
-                            LotId:             Guid.NewGuid(),
-                            SourceFillId:      f.Id,
-                            TimeUtc:           f.TimeUtc,
-                            Symbol:            symbol,
-                            QtyRemaining:      f.Quantity,
-                            Price:             f.Price,
-                            FeeQuoteAllocated: f.FeeQuote
-                        );
+                        var lot = new OpenLot
+                        {
+                            LotId             = Guid.NewGuid(),
+                            SourceFillId      = f.Id,
+                            TimeUtc           = f.TimeUtc,
+                            Symbol            = symbol,
+                            QtyRemaining      = f.Quantity,
+                            Price             = f.Price,
+                            FeeQuoteAllocated = f.FeeQuote
+                        };
                         q.Enqueue(lot);
                         break;
                     }
@@ -61,35 +86,30 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                 case TxType.Sell:
                 case TxType.Withdraw:
                     {
-                        // Sell consumes lots and creates Matches.
-                        // Withdraw consumes lots too, but SellPrice=0 and PnL=0 (transfer out)
                         var qtyToConsume = f.Quantity;
                         if (qtyToConsume <= 0) break;
 
                         var sellPrice = (f.Type == TxType.Sell) ? f.Price : 0m;
+                        var available = q.Sum(lot => lot.QtyRemaining);
 
-                        // Fee on the "consume fill" is distributed proportionally by matches
-                        // (if the Sell is partially closed by several lots - fee split by qty)
+                        if (qtyToConsume > available)
+                        {
+                            issues.Add(new LedgerIssue(
+                                f.Id,
+                                symbol,
+                                LedgerIssueKind.InsufficientSpotQuantity,
+                                qtyToConsume,
+                                available,
+                                $"{f.Type} requests {qtyToConsume} {symbol}, but only {available} is available."));
+                            invalidSymbols.Add(symbol);
+                            break;
+                        }
+
                         var totalSellQty = qtyToConsume;
                         var sellFeeTotal = f.FeeQuote;
 
                         while (qtyToConsume > 0m)
                         {
-                            if (q.Count == 0)
-                            {
-                                // synthetic lot to prevent infinite loop + keep accounting consistent
-                                // Price = sellPrice so PnL ~ -sellFeePart (fees still counted), not some crazy value
-                                q.Enqueue(new Lot(
-                                    LotId:             Guid.NewGuid(),
-                                    SourceFillId:      f.Id,
-                                    TimeUtc:           f.TimeUtc,
-                                    Symbol:            symbol,
-                                    QtyRemaining:      qtyToConsume,
-                                    Price:             sellPrice,
-                                    FeeQuoteAllocated: 0m
-                                ));
-                            }
-
                             var lot  = q.Peek();
                             if (lot.QtyRemaining <= 0m)
                             {
@@ -101,19 +121,12 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                             if (take <= 0m)
                                 break;
 
-                            // Buy fee portion: proportional to the "take" of the lot's remaining amount
-                            // (we store the fee in the lot as the total fee of the original buy; it's more correct to store fee-per-qty)
-                            // For MVP: recalculating based on the original qty is impossible (we don't store the original qty).
-                            // Therefore: calculating fee-per-qty based on the current lot.QtyRemaining + the amount already consumed is not possible.
-                            // Solution: store fee-per-qty when creating the lot:
-                            // This is simpler: store FeeQuoteAllocated as the "remaining fee" and withdraw proportionally.
+                            // Split the lot's remaining fee in the same proportion as its quantity.
                             var buyFeeRemaining = lot.FeeQuoteAllocated;
                             var buyFeePart      = (lot.QtyRemaining <= 0m) ? 0m : buyFeeRemaining * (take / lot.QtyRemaining);
 
-                            // sell fee part by qty
                             var sellFeePart = (totalSellQty <= 0m) ? 0m : sellFeeTotal * (take / totalSellQty);
 
-                            // Realized PnL (in USDT): (sell proceeds - sell fee part) - (buy cost + buy fee part)
                             var proceeds = sellPrice * take;
                             var cost = lot.Price * take;
 
@@ -121,10 +134,7 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                             if (f.Type == TxType.Sell)
                                 pnl = (proceeds - sellFeePart) - (cost + buyFeePart);
                             else
-                                pnl = 0m; // withdraw/transfer out: calculate pnl 0
-
-                            if (take <= 0m)
-                                continue;
+                                pnl = 0m;
 
                             var m = new Match(
                                 MatchId:          Guid.NewGuid(),
@@ -142,14 +152,12 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                             matches.Add(m);
                             realized += pnl;
 
-                            // update lot
-                            var newQty = lot.QtyRemaining - take;
-                            var newFee = lot.FeeQuoteAllocated - buyFeePart;
+                            lot.QtyRemaining      -= take;
+                            lot.FeeQuoteAllocated -= buyFeePart;
 
-                            q.Dequeue();
-                            if (newQty > 0m)
+                            if (lot.QtyRemaining <= 0m)
                             {
-                                q.Enqueue(lot with { QtyRemaining = newQty, FeeQuoteAllocated = newFee });
+                                q.Dequeue();
                             }
 
                             qtyToConsume -= take;
@@ -158,11 +166,9 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                     }
 
                 case TxType.Fee:
-                    // For MVP: Fee as a separate transaction, we do not touch the lots
-                    // It can then be taken into account as a cash expense
+                    // Standalone fees affect quote cash, not cost-basis lots.
                     break;
 
-                // Futures transactions are handled by FuturesEngine — skip them here
                 case TxType.OpenLong:
                 case TxType.CloseLong:
                 case TxType.OpenShort:
@@ -174,7 +180,11 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
             }
         }
 
-        var remaining = queues.Values.SelectMany(x => x).ToList();
-        return new CostBasisResult(remaining, matches, realized);
+        var remaining = queues.Values
+            .SelectMany(queue => queue)
+            .Select(lot => lot.ToSnapshot())
+            .ToList();
+
+        return new CostBasisResult(remaining, matches, realized, issues);
     }
 }

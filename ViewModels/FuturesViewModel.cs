@@ -58,7 +58,7 @@ public partial class FuturesViewModel : ObservableObject
                     r.ApplyMarkPrice(price);
             }, DispatcherPriority.Background);
         }
-        catch { /* never throw from event handler */ }
+        catch { /* Price updates are best effort. */ }
     }
 
     partial void OnSelectedPositionChanged(FuturesPositionRowVm? value)
@@ -141,7 +141,6 @@ public partial class FuturesViewModel : ObservableObject
             if (icon is not null) r.SymbolIcon = icon;
         }
 
-        bool restoredSelection = false;
         _isRefreshing = true;
 
         try
@@ -158,8 +157,7 @@ public partial class FuturesViewModel : ObservableObject
 
                     if (match is not null)
                     {
-                        SelectedPosition  = match;
-                        restoredSelection = true;
+                        SelectedPosition = match;
                     }
                 }
             }, DispatcherPriority.DataBind, ct);

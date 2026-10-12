@@ -12,9 +12,11 @@ using CryptoJournal.Wpf.Services.Environments;
 using CryptoJournal.Wpf.Services.Exchanges;
 using CryptoJournal.Wpf.Services.Portfolio;
 using CryptoJournal.Wpf.Services.Prices;
+using CryptoJournal.Wpf.Services.Updates;
 using CryptoJournal.Wpf.Services.Validation;
 using CryptoJournal.Wpf.Storage.Attachments;
 using CryptoJournal.Wpf.Storage.Candles;
+using CryptoJournal.Wpf.Storage.Common;
 using CryptoJournal.Wpf.Storage.Portfolio;
 using CryptoJournal.Wpf.Storage.Scenarios;
 using CryptoJournal.Wpf.UI;
@@ -32,12 +34,17 @@ namespace CryptoJournal.Wpf;
 
 public partial class App : Application
 {
+    private const string ApplicationMutexName = "CryptoJournal-5E7D3D4C-6E22-4F54-8C9D-1E3BFEA8A8D1";
+
     private IHost? _host;
+    private Mutex? _applicationMutex;
 
     private const string USER_AGENT = "CryptoJournal.Wpf (https://github.com/ButterDevelop/CryptoJournal.Wpf)";
 
     protected override async void OnStartup(StartupEventArgs e)
     {
+        _applicationMutex = new Mutex(false, ApplicationMutexName);
+
         var culture = new CultureInfo("en-US");
         CultureInfo.DefaultThreadCurrentCulture   = culture;
         CultureInfo.DefaultThreadCurrentUICulture = culture;
@@ -49,6 +56,22 @@ public partial class App : Application
             new FrameworkPropertyMetadata(XmlLanguage.GetLanguage(culture.IetfLanguageTag)));
 
         base.OnStartup(e);
+
+        try
+        {
+            AppDataMigration.CreateDefault().Migrate();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"CryptoJournal could not migrate application data to LocalAppData.\n\n{ex.Message}\n\n" +
+                "The original data was not deleted. The application will now close.",
+                "Application data migration failed",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(-1);
+            return;
+        }
 
         _host = Host.CreateDefaultBuilder()
             .ConfigureServices(services =>
@@ -80,9 +103,9 @@ public partial class App : Application
 
                 services.AddSingleton<ICostBasisEngine,     FifoCostBasisEngine>();
                 services.AddSingleton<FuturesEngine>();
+                services.AddSingleton<TransactionPnlCalculator>();
                 services.AddSingleton<IPortfolioCalculator, PortfolioCalculator>();
 
-                services.AddSingleton<ITradePrecheck,   TradePrecheck>();
                 services.AddSingleton<ITradePrecheck,   TradePrecheck>();
                 services.AddSingleton<IScenarioStore,   ScenarioStore>();
                 services.AddSingleton<ILocalImageStore, LocalImageStore>();
@@ -103,6 +126,7 @@ public partial class App : Application
                 services.AddSingleton<ICryptoIconCache,       CryptoIconCache>();
 
                 services.AddSingleton<MarketDataPollingService>();
+                services.AddSingleton<IUpdateService, GitHubUpdateService>();
 
                 // VMs
                 services.AddSingleton<TransactionsViewModel>();
@@ -140,6 +164,14 @@ public partial class App : Application
             await _host.StopAsync();
             _host.Dispose();
         }
+
+        _applicationMutex?.Dispose();
         base.OnExit(e);
+    }
+
+    internal void PrepareForUpdate()
+    {
+        _applicationMutex?.Dispose();
+        _applicationMutex = null;
     }
 }

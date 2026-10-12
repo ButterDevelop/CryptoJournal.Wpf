@@ -4,6 +4,7 @@ using CryptoJournal.Wpf.Domain.Models;
 using CryptoJournal.Wpf.Services.Candles;
 using CryptoJournal.Wpf.Services.CryptoIcon;
 using CryptoJournal.Wpf.Services.Environments;
+using CryptoJournal.Wpf.Services.Portfolio;
 using CryptoJournal.Wpf.Services.Prices;
 using CryptoJournal.Wpf.Storage.Scenarios;
 using CryptoJournal.Wpf.UI;
@@ -118,7 +119,6 @@ public partial class DashboardViewModel : ObservableObject
         PnlSeries.Add(_realizedRowSeries);
     }
 
-    // ======= scenario rows =======
     public ObservableCollection<ScenarioRowVm> ScenarioRows { get; } = [];
 
     [ObservableProperty] private decimal  realizedPnl;
@@ -147,7 +147,6 @@ public partial class DashboardViewModel : ObservableObject
     public Axis[] PnlXAxes { get; }
     public Axis[] PnlYAxes { get; }
 
-    // Called by MainViewModel calc pipeline
     public async Task UpdateAsync(
         PortfolioSnapshot                     snap,
         IReadOnlyList<TradeFill>              fills,
@@ -189,7 +188,6 @@ public partial class DashboardViewModel : ObservableObject
         }, DispatcherPriority.Background, ct);
     }
 
-    // ======= table builder =======
     private async Task BuildScenarioTableAsync(
         PortfolioSnapshot                     snap,
         IReadOnlyDictionary<string, decimal>? marks,
@@ -364,7 +362,6 @@ public partial class DashboardViewModel : ObservableObject
         }
     }
 
-    // ======= scenario change handler =======
     private async void OnScenariosChanged(string symbol)
     {
         try
@@ -372,8 +369,7 @@ public partial class DashboardViewModel : ObservableObject
             symbol = (symbol ?? "").Trim().ToUpperInvariant();
             if (symbol.Length == 0) return;
 
-            // planKey could be "BTC" or "BTC:Long"
-            // We just update all ScenarioRows that match the symbol or symbol:side
+            // A plan may target a symbol or one side of a futures position.
             await _ui.InvokeAsync(() =>
             {
                 bool any = false;
@@ -406,11 +402,10 @@ public partial class DashboardViewModel : ObservableObject
         }
         catch
         {
-            // never throw
+            // Scenario updates are best effort.
         }
     }
 
-    // ======= polling updates =======
     private async void OnLastPriceUpdated(string symbol, decimal price)
     {
         try
@@ -448,8 +443,7 @@ public partial class DashboardViewModel : ObservableObject
 
     private void RecalcEquityAtScenarios()
     {
-        // require Mark for all rows to show an exact number
-        // (same honesty model as UnrealizedPnl property)
+        // The total is unavailable until every row has a mark price.
         decimal? sum = 0m;
 
         foreach (var contrib in ScenarioRows.Select(sr => sr.EquityContributionAtScenario))
@@ -508,10 +502,9 @@ public partial class DashboardViewModel : ObservableObject
                 row.Ath = ath;
             }, DispatcherPriority.Background);
         }
-        catch { /* never throw */ }
+        catch { /* ATH updates are best effort. */ }
     }
 
-    // ======= charts =======
     private void BuildCharts(PortfolioSnapshot snap)
     {
         var useMarket = snap.Positions.All(p => p.MarketValueQuote is not null);
@@ -624,13 +617,12 @@ public partial class DashboardViewModel : ObservableObject
 
 internal static class CashCalculator
 {
-    // Simple USDT Cash: Buy/Sell + Deposit/Withdraw by quote symbol + Fee
     public static decimal ComputeQuoteCash(IReadOnlyList<TradeFill> fills, string quote)
     {
         quote = quote.Trim().ToUpperInvariant();
         decimal cash = 0m;
 
-        foreach (var f in fills.OrderBy(x => x.TimeUtc))
+        foreach (var f in fills.OrderBy(fill => fill, TradeFillChronologicalComparer.Instance))
         {
             var sym = f.Symbol.Trim().ToUpperInvariant();
 
@@ -645,7 +637,7 @@ internal static class CashCalculator
                     break;
 
                 case TxType.Deposit:
-                    if (sym == quote) cash += f.Quantity - f.FeeQuote;
+                    cash += sym == quote ? f.Quantity - f.FeeQuote : -f.FeeQuote;
                     break;
 
                 case TxType.Withdraw:

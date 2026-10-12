@@ -12,15 +12,15 @@ public sealed record TradeFill(
     decimal                Price,
     decimal                FeeQuote,
     string?                Note        = null,
-    decimal                Leverage    = 1m,   // 1 represents spot trading; >1 denotes leveraged margin/futures trading
-    decimal?               TakeProfit  = null, // Applicable only to OpenLong/OpenShort positions
-    decimal?               StopLoss    = null, // Applicable only to OpenLong/OpenShort positions
-    IReadOnlyList<string>? Attachments = null  // List of local filenames for associated image attachments
+    decimal                Leverage    = 1m,
+    decimal?               TakeProfit  = null,
+    decimal?               StopLoss    = null,
+    IReadOnlyList<string>? Attachments = null
 )
 {
     [JsonIgnore] public decimal  ValueQuote => Quantity * Price;
 
-    // Realized PnL computed properties (applicable to Sell transactions; ephemeral)
+    // Calculated values are not part of the stored ledger.
     [JsonIgnore] public decimal? RealizedPnlQuote { get; init; }
     [JsonIgnore] public decimal? RealizedPnlPct   { get; init; }
 

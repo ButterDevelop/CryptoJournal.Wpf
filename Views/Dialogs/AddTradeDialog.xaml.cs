@@ -25,10 +25,8 @@ public partial class AddTradeDialog : Window
         if (DataContext is not AddTradeDialogViewModel vm)
             return;
 
-        // Perform comprehensive transaction validation (time, balances, etc.)
         if (!vm.TryValidate(out var message))
         {
-            // Display a user-friendly error dialog for unparseable time inputs
             if (message == "Invalid Time (UTC).")
             {
                 await _confirm.InfoAsync(
@@ -45,7 +43,6 @@ public partial class AddTradeDialog : Window
                 return;
             }
 
-            // Display standard error dialog for domain or balance validation failures
             await _confirm.InfoAsync(
                 header:  "Invalid trade",
                 message: message,
@@ -55,7 +52,6 @@ public partial class AddTradeDialog : Window
             return;
         }
 
-        // Format the confirmed UTC time canonically before closing
         vm.TryGetTimeUtc(out var utc);
         vm.TimeUtcText = utc.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
@@ -83,24 +79,21 @@ public partial class AddTradeDialog : Window
         if (DataContext is AddTradeDialogViewModel vm && vm.IsTimePopupOpen)
         {
             vm.IsTimePopupOpen = false;
-            e.Handled          = true; // Consume the key event to close the popup without dismissing the entire dialog
+            e.Handled          = true;
         }
     }
 
     private void TimePopupButton_Click(object sender, RoutedEventArgs e)
     {
-        // Toggle popup state on mouse release to prevent immediate re-closing
         if (DataContext is AddTradeDialogViewModel vm && !vm.IsTimePopupOpen)
             vm.IsTimePopupOpen = true;
     }
 
     private void TimeCalendar_SelectedDatesChanged(object sender, SelectionChangedEventArgs e)
     {
-        // Release mouse capture from the Calendar control to ensure the Apply button receives the next click
         if (Mouse.Captured != null)
             Mouse.Capture(null);
 
-        // Programmatically shift focus to the Apply button after a date is selected
         Dispatcher.BeginInvoke(new Action(() =>
         {
             ApplyTimeButton.Focus();

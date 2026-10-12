@@ -1,5 +1,6 @@
 ﻿using CryptoJournal.Wpf.Domain.Enums;
 using CryptoJournal.Wpf.Domain.Models;
+using CryptoJournal.Wpf.Services.Portfolio;
 using System.Globalization;
 
 namespace CryptoJournal.Wpf.Services.Validation;
@@ -34,7 +35,6 @@ public sealed class TradePrecheck : ITradePrecheck
         if (feeQuote < 0m)
             return new PrecheckResult(false, "Fee must be >= 0.");
 
-        // Calculate global balances chronologically prior to this transaction
         var bal = BuildBalances(existingFills, timeUtc, quoteSymbol);
 
         bal.TryGetValue(symbol,      out var symBal);
@@ -59,8 +59,7 @@ public sealed class TradePrecheck : ITradePrecheck
                                 $"Trying to sell: {Amt(qty, symbol)}",
                                 $"Shortage: {Amt(qty - symBal, symbol)}");
 
-                // Transaction fees are deducted from quoted sale proceeds; validate quote balance post-sale
-                var proceeds = qty * price; // Gross proceeds in quote currency
+                var proceeds = qty * price;
                 var quoteAfter = quoteBal + (proceeds - feeQuote);
 
                 if (quoteAfter < 0m)
@@ -75,7 +74,6 @@ public sealed class TradePrecheck : ITradePrecheck
 
             case TxType.Withdraw:
             {
-                // Withdrawal operations still require fees deducted from the quote balance
                 if (string.Equals(symbol, quoteSymbol, StringComparison.OrdinalIgnoreCase))
                 {
                     if (qty + feeQuote > quoteBal)
@@ -101,7 +99,6 @@ public sealed class TradePrecheck : ITradePrecheck
 
             case TxType.Buy:
             {
-                // Buying consumes quote liquidity: (Quantity * Price) + FeeQuote
                 var needQuote = (qty * price) + feeQuote;
                 if (needQuote > quoteBal)
                     return Fail($"Not enough {quoteSymbol}",
@@ -132,7 +129,6 @@ public sealed class TradePrecheck : ITradePrecheck
 
             case TxType.Fee:
             {
-                // Fees are strictly deducted from the quote currency balance
                 if (feeQuote <= 0m)
                     return new PrecheckResult(false, "Fee must be > 0 for Fee transaction.");
 
@@ -144,8 +140,12 @@ public sealed class TradePrecheck : ITradePrecheck
                 return new PrecheckResult(true, "");
             }
 
-            // Deposits are unbounded as they originate externally
             case TxType.Deposit:
+                if (!string.Equals(symbol, quoteSymbol, StringComparison.OrdinalIgnoreCase) && feeQuote > quoteBal)
+                    return Fail($"Not enough {quoteSymbol} to pay deposit fee",
+                                $"You have: {Amt(quoteBal, quoteSymbol)}",
+                                $"Fee: {Amt(feeQuote, quoteSymbol)}");
+
                 return new PrecheckResult(true, "");
 
             default:
@@ -160,9 +160,12 @@ public sealed class TradePrecheck : ITradePrecheck
         decimal Get(string s) => bal.TryGetValue(s, out var v) ? v : 0m;
         void Add(string s, decimal d) => bal[s] = Get(s) + d;
 
-        foreach (var f in fills
-                     .Where(f => f.TimeUtc.UtcDateTime <= untilUtc)
-                     .OrderBy(f => f.TimeUtc))
+        var previousFills = fills
+            .Where(fill => fill.TimeUtc.UtcDateTime <= untilUtc)
+            .OrderBy(fill => fill, TradeFillChronologicalComparer.Instance)
+            .ToList();
+
+        foreach (var f in previousFills)
         {
             var sym = (f.Symbol ?? "").Trim().ToUpperInvariant();
             if (string.IsNullOrWhiteSpace(sym)) continue;
@@ -170,25 +173,30 @@ public sealed class TradePrecheck : ITradePrecheck
             switch (f.Type)
             {
                 case TxType.Buy:
-                    // Increment base asset, decrement quote asset (value + fee)
                     Add(sym, f.Quantity);
                     Add(quote, -((f.Quantity * f.Price) + f.FeeQuote));
                     break;
 
                 case TxType.Sell:
-                    // Decrement base asset, increment quote asset (value - fee)
                     Add(sym, -f.Quantity);
                     Add(quote, (f.Quantity * f.Price) - f.FeeQuote);
                     break;
 
                 case TxType.Deposit:
-                    // Deposits can target either the quote or base currency
-                    Add(sym, f.Quantity - f.FeeQuote);
+                    if (string.Equals(sym, quote, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Add(quote, f.Quantity - f.FeeQuote);
+                    }
+                    else
+                    {
+                        Add(sym, f.Quantity);
+                        Add(quote, -f.FeeQuote);
+                    }
                     break;
 
                 case TxType.Withdraw:
                     Add(sym, -(f.Quantity));
-                    Add(quote, -(f.FeeQuote)); // Deduct the transaction fee from the quote balance
+                    Add(quote, -f.FeeQuote);
                     break;
 
                 case TxType.Fee:
@@ -197,31 +205,25 @@ public sealed class TradePrecheck : ITradePrecheck
 
                 case TxType.OpenLong:
                 case TxType.OpenShort:
-                {
-                    var margin = (f.Quantity * f.Price) / Math.Max(1m, f.Leverage);
-                    Add(quote, -margin - f.FeeQuote); // Deduct required margin and transaction fee
+                    Add(quote, -f.FeeQuote);
                     break;
-                }
 
                 case TxType.CloseLong:
                 case TxType.CloseShort:
-                {
-                    // Precheck lacks exact PnL without a complete FIFO simulation pass.
-                    // Release the approximate locked margin and deduct closing fees.
-                    // PnL is omitted here, resulting in a slightly conservative free balance estimate.
-                    var marginReturn = (f.Quantity * f.Price) / Math.Max(1m, f.Leverage);
-                    Add(quote, marginReturn - f.FeeQuote);
                     break;
-                }
             }
         }
+
+        var futures       = new FuturesEngine().Build(previousFills);
+        var lockedMargin  = futures.Positions.Sum(position => position.Margin);
+        var availableCash = futures.RealizedPnlQuote - lockedMargin;
+        Add(quote, availableCash);
 
         return bal;
     }
 
     private static string Fmt(decimal v, int maxDec = 8)
     {
-        // "#,0.#########" => thousands grouping + up to maxDec digits, without trailing zeros
         var fmt = maxDec <= 0 ? "#,0" : "#,0." + new string('#', maxDec);
         return v.ToString(fmt, Culture);
     }

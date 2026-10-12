@@ -1,3 +1,6 @@
 <Solution>
   <Project Path="CryptoJournal.Wpf.csproj" />
+  <Folder Name="/tests/">
+    <Project Path="tests/CryptoJournal.Wpf.Tests/CryptoJournal.Wpf.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -64,6 +64,10 @@
                                          Width="18" Height="18"
                                          Margin="0,0,6,0"/>
                             <TextBlock Text="Info"/>
+                            <TextBlock Text="Update"
+                                       Foreground="#3EA6FF"
+                                       Margin="8,0,0,0"
+                                       Visibility="{Binding AboutVm.IsUpdateAvailable, Converter={StaticResource BoolToVis}}"/>
                         </StackPanel>
                     </TabItem.Header>
 
@@ -113,6 +117,19 @@
                                  IsIndeterminate="True"/>
                 </StackPanel>
             </materialDesign:Card>
+        </Border>
+
+        <Border Visibility="{Binding HasError, Converter={StaticResource BoolToVis}}"
+                Background="#D9363636"
+                CornerRadius="8"
+                Padding="14,10"
+                Margin="24"
+                VerticalAlignment="Top"
+                Panel.ZIndex="1000">
+            <TextBlock Text="{Binding ErrorMessage}"
+                       Foreground="White"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap"/>
         </Border>
 
     </Grid>

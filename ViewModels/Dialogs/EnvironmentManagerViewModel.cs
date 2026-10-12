@@ -16,16 +16,13 @@ public partial class EnvironmentManagerViewModel : ObservableObject
 
     [ObservableProperty] private EnvironmentProfile? selected;
 
-    // Right-side editor fields
     [ObservableProperty] private string editName  = "";
     [ObservableProperty] private string editQuote = "USDT";
 
-    // Create/update mode
     [ObservableProperty] private bool isNewMode;
 
     public string SaveButtonText => IsNewMode ? "Create" : "Update";
 
-    // For UI "current" indicator in list
     public string CurrentId => _env.Current.Id;
 
     private bool _suppressAutoSwitch;
@@ -39,10 +36,8 @@ public partial class EnvironmentManagerViewModel : ObservableObject
         _env.EnvironmentsChanged += (_, __) => Reload();
         _env.CurrentChanged += (_, __) =>
         {
-            // refresh current indicator
             OnPropertyChanged(nameof(CurrentId));
 
-            // keep selection on current (but do NOT trigger switching loop)
             var cur = Items.FirstOrDefault(x => x.Id == _env.Current.Id);
             if (cur is not null && !ReferenceEquals(Selected, cur))
             {
@@ -61,13 +56,11 @@ public partial class EnvironmentManagerViewModel : ObservableObject
 
         OnPropertyChanged(nameof(CurrentId));
 
-        // select current by default
         var cur = Items.FirstOrDefault(x => x.Id == _env.Current.Id) ?? Items.FirstOrDefault();
         _suppressAutoSwitch = true;
         Selected = cur;
         _suppressAutoSwitch = false;
 
-        // edit selected by default
         if (Selected is not null)
         {
             EditName  = Selected.Name;
@@ -79,15 +72,12 @@ public partial class EnvironmentManagerViewModel : ObservableObject
     {
         if (value is null) return;
 
-        // selection should fill editor
         EditName  = value.Name;
         EditQuote = value.QuoteCurrency;
 
-        // selection ends "create mode"
         IsNewMode = false;
         OnPropertyChanged(nameof(SaveButtonText));
 
-        // auto-switch current (unless we are syncing selection from CurrentChanged)
         if (_suppressAutoSwitch) return;
 
         _ = AutoSwitchAsync(value);
@@ -101,7 +91,7 @@ public partial class EnvironmentManagerViewModel : ObservableObject
         }
         catch
         {
-            // ignore / log
+            // Keep the manager usable if switching the active environment fails.
         }
     }
 
@@ -141,7 +131,6 @@ public partial class EnvironmentManagerViewModel : ObservableObject
     {
         if (item is null) return;
     
-        // FIRST check "last env"
         if (Items.Count <= 1)
         {
             await _confirm.InfoAsync(
@@ -156,7 +145,6 @@ public partial class EnvironmentManagerViewModel : ObservableObject
             return;
         }
     
-        // Further confirmation (оставляем ConfirmAsync как есть)
         var ok1 = await _confirm.ConfirmAsync(
             "Confirm",
             $"Delete environment '{item.Name} ({item.QuoteCurrency})'?",

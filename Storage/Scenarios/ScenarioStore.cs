@@ -40,7 +40,6 @@ public sealed class ScenarioStore : IScenarioStore
 
             loaded.EnvironmentId = envId;
 
-            // Normalize symbol keys upon loading for consistency
             loaded.PlansBySymbol = loaded.PlansBySymbol
                 .ToDictionary(k => NormalizeSymbol(k.Key),
                               v => v.Value,
@@ -66,7 +65,6 @@ public sealed class ScenarioStore : IScenarioStore
 
             envId = _envId;
 
-            // Create a deep snapshot of plans and legs to ensure stable serialization
             snapshot = new ScenarioStateDto
             {
                 EnvironmentId = _state.EnvironmentId,
@@ -78,13 +76,9 @@ public sealed class ScenarioStore : IScenarioStore
         }
 
         var file = ScenarioPaths.GetActiveScenarioFile(envId);
-        var tmp  = file + ".tmp";
 
         var json = JsonSerializer.Serialize(snapshot, _json);
-        File.WriteAllText(tmp, json);
-
-        if (File.Exists(file)) File.Delete(file);
-        File.Move(tmp, file);
+        AtomicFile.WriteText(file, json);
     }
 
     public ScenarioPlanDto? TryGetPlan(string symbol)
@@ -95,7 +89,7 @@ public sealed class ScenarioStore : IScenarioStore
         lock (_sync)
         {
             return _state.PlansBySymbol.TryGetValue(key, out var plan)
-                ? ClonePlan(plan) // IMPORTANT: Provide a cloned instance to prevent unintended mutations
+                ? ClonePlan(plan)
                 : null;
         }
     }
@@ -111,7 +105,7 @@ public sealed class ScenarioStore : IScenarioStore
 
         lock (_sync)
         {
-            _state.PlansBySymbol[key] = ClonePlan(plan); // IMPORTANT: Store a cloned instance to decouple from the original object
+            _state.PlansBySymbol[key] = ClonePlan(plan);
         }
     }
 

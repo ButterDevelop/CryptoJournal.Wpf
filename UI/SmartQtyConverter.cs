@@ -23,19 +23,16 @@ public sealed class SmartQtyConverter : IMultiValueConverter
         int dotIndex = qtyStr.IndexOfAny(['.', ',']);
         if (dotIndex == -1)
         {
-            // Case for very long integers (rare in crypto qty, but possible)
             return qtyStr.Length > MaxLen ? string.Concat(qtyStr.AsSpan(0, MaxLen), "...") : qtyStr;
         }
 
-        // We have a decimal point.
         string intPart = qtyStr[..dotIndex];
         int intDigitsCount = intPart.TrimStart('-', '0').Length;
-        if (intDigitsCount == 0 && intPart.Contains('0')) intDigitsCount = 1; // "0." counts as 1 digit budget
+        if (intDigitsCount == 0 && intPart.Contains('0')) intDigitsCount = 1;
 
         int fractionalBudget = MaxLen - intDigitsCount;
         if (fractionalBudget < 0) fractionalBudget = 0;
 
-        // Total length will be (dotIndex + 1 + fractionalBudget)
         int targetLength = dotIndex + 1 + fractionalBudget;
 
         if (qtyStr.Length > targetLength)

@@ -5,8 +5,8 @@
              xmlns:ui="clr-namespace:CryptoJournal.Wpf.UI">
 
     <UserControl.Resources>
-        <!-- Window Width Dependent Font Scaling -->
         <ui:ResponsiveFontConverter x:Key="ResponsiveFont"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
 
         <!-- Shared Hyperlink Formatting -->
         <Style x:Key="RepoLinkStyle" TargetType="{x:Type Hyperlink}">
@@ -95,6 +95,25 @@
                                                   Path=ActualWidth,
                                                   Converter={StaticResource ResponsiveFont},
                                                   ConverterParameter=Body}" />
+
+                    <TextBlock Text="Updates"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,8"
+                               FontSize="16"/>
+
+                    <TextBlock Text="{Binding UpdateStatus}"
+                               TextWrapping="Wrap"
+                               Opacity="0.85"
+                               Margin="0,0,0,10"/>
+
+                    <WrapPanel Margin="0,0,0,16">
+                        <Button Content="Check for updates"
+                                Command="{Binding CheckForUpdatesCommand}"
+                                Margin="0,0,10,0"/>
+                        <Button Content="{Binding InstallUpdateText}"
+                                Command="{Binding InstallUpdateCommand}"
+                                Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVis}}"/>
+                    </WrapPanel>
 
                     <TextBlock Text="Key features"
                                FontWeight="SemiBold"

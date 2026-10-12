@@ -11,13 +11,11 @@ public static class ChartColors
 {
     public static ulong Sha256(string s)
     {
-        // Instantiate a cryptographic SHA256 hashing algorithm
         byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(s));
 
         return BinaryPrimitives.ReadUInt64LittleEndian(bytes);
     }
 
-    // Translate HSL color space to SKColor (normalized 0..1 range)
     public static SKColor FromHsl(float h, float s, float l, byte a = 255)
     {
         h = h % 360f;
@@ -48,21 +46,17 @@ public static class ChartColors
 
         byte[] bytes = SHA256.HashData(Encoding.UTF8.GetBytes(symbol));
 
-        // 16 bit -> hue (0..360)
         ushort h16 = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(0, 2));
         float hue = (h16 / 65535f) * 360f;
 
-        // 8 bit -> saturation in proper range
         byte s8 = bytes[2];
-        float sat = 0.60f + (s8 / 255f) * 0.35f; // 0.60..0.95
+        float sat = 0.60f + (s8 / 255f) * 0.35f;
 
-        // 8 bit -> lightness in a fairly light range
         byte l8 = bytes[3];
-        float lig = 0.50f + (l8 / 255f) * 0.20f; // 0.50..0.70
+        float lig = 0.50f + (l8 / 255f) * 0.20f;
 
         var color = FromHsl(hue, sat, lig);
 
-        // end up in a dark spot (rare, but it might happen due to conversion/rounding) - just lighten it
         if (RelativeLuma(color) < 0.40f)
             color = EnsureLight(color, minLuma: 0.40f);
 
@@ -70,14 +64,13 @@ public static class ChartColors
     }
 
     public static SKColor PnlColor(decimal value)
-        => value == 0 ? new SKColor(160, 200, 160) : (value > 0 ? new SKColor(46, 204, 113) : new SKColor(231, 76, 60)); // Maps positive variants to shades of green and negative to red
+        => value == 0 ? new SKColor(160, 200, 160) : (value > 0 ? new SKColor(46, 204, 113) : new SKColor(231, 76, 60));
 
     public static SolidColorPaint CreatePnlLabelPaint()
     {
-        return new SolidColorPaint(new SKColor(245, 245, 245)) // almost white
+        return new SolidColorPaint(new SKColor(245, 245, 245))
         {
             SKTypeface  = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold),
-            // shadow: dx, dy, sigmaX, sigmaY, color
             ImageFilter = new DropShadow(0, 2, 4, 4, new SKColor(0, 0, 0, 200)),
             ZIndex      = 9999,
         };
@@ -95,7 +88,6 @@ public static class ChartColors
 
     private static float RelativeLuma(SKColor c)
     {
-        // sRGB relative luminance (approx)
         float r = c.Red   / 255f;
         float g = c.Green / 255f;
         float b = c.Blue  / 255f;
@@ -107,7 +99,6 @@ public static class ChartColors
         var l = RelativeLuma(c);
         if (l >= minLuma) return c;
 
-        // Linearly interpolate the color value towards pure white
         float t = (minLuma - l) / MathF.Max(0.0001f, 1f - l);
         byte  r = (byte)Math.Clamp(c.Red   + (255 - c.Red)   * t, 0, 255);
         byte  g = (byte)Math.Clamp(c.Green + (255 - c.Green) * t, 0, 255);
