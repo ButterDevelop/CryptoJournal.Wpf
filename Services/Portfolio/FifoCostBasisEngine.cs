@@ -58,6 +58,9 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
         {
             var symbol = f.Symbol.Trim().ToUpperInvariant();
 
+            if (string.Equals(symbol, _env.Current.QuoteCurrency, StringComparison.OrdinalIgnoreCase))
+                continue;
+
             if (!queues.TryGetValue(symbol, out var q))
             {
                 q = new Queue<OpenLot>();
@@ -69,9 +72,6 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                 case TxType.Buy:
                 case TxType.Deposit:
                     {
-                        if (string.Equals(symbol, _env.Current.QuoteCurrency, StringComparison.OrdinalIgnoreCase))
-                            break;
-
                         var quantity = ApplyToDeficits(symbol, f.Quantity, deficits, issues);
                         if (quantity <= 0m)
                             break;

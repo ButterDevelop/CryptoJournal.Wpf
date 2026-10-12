@@ -135,6 +135,34 @@ internal sealed class FifoCostBasisEngineTests
     }
 
     [Test]
+    public void Build_QuoteCurrencyTransactions_DoNotCreatePositionIssues()
+    {
+        var deposit = new TradeFillBuilder()
+            .As(TxType.Deposit)
+            .For("USDT")
+            .WithQuantity(100m)
+            .AtPrice(1m)
+            .Build();
+        var withdraw = new TradeFillBuilder()
+            .At(deposit.TimeUtc.AddMinutes(1))
+            .As(TxType.Withdraw)
+            .For("USDT")
+            .WithQuantity(200m)
+            .AtPrice(1m)
+            .Build();
+
+        var result = _engine.Build([deposit, withdraw]);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.LotsRemaining, Is.Empty);
+            Assert.That(result.Matches, Is.Empty);
+            Assert.That(result.Issues, Is.Empty);
+            Assert.That(result.RealizedPnlQuote, Is.Zero);
+        }
+    }
+
+    [Test]
     public void Build_Oversell_ConsumesAvailableLotsAndReportsIssue()
     {
         var buy = new TradeFillBuilder()

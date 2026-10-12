@@ -196,7 +196,7 @@ public partial class PositionsViewModel : ObservableObject
 
         var posList = positions as IList<PositionSnapshot> ?? positions.ToList();
         var spotIssues = (issues ?? [])
-            .Where(issue => issue.Kind == LedgerIssueKind.InsufficientSpotQuantity)
+            .Where(issue => issue.Kind == LedgerIssueKind.InsufficientSpotQuantity && !issue.IsReconciled)
             .ToList();
 
         var currentSymbols = posList.Where(p => p.Quantity > 0m && !string.IsNullOrWhiteSpace(p.Symbol))

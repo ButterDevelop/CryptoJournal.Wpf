@@ -1,6 +1,6 @@
 #define MyAppName "CryptoJournal"
 #ifndef MyAppVersion
-#define MyAppVersion "1.0.5"
+#define MyAppVersion "1.0.6"
 #endif
 #define MyAppPublisher "ButterDevelop"
 #define MyAppURL "https://github.com/ButterDevelop/CryptoJournal.Wpf"
@@ -93,6 +93,21 @@ Source: "{#MyPublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdi
 
 [Dirs]
 Name: "{localappdata}\{#MyAppDataFolderName}"
+
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\cs"
+Type: filesandordirs; Name: "{app}\de"
+Type: filesandordirs; Name: "{app}\es"
+Type: filesandordirs; Name: "{app}\fr"
+Type: filesandordirs; Name: "{app}\it"
+Type: filesandordirs; Name: "{app}\ja"
+Type: filesandordirs; Name: "{app}\ko"
+Type: filesandordirs; Name: "{app}\pl"
+Type: filesandordirs; Name: "{app}\pt-BR"
+Type: filesandordirs; Name: "{app}\ru"
+Type: filesandordirs; Name: "{app}\tr"
+Type: filesandordirs; Name: "{app}\zh-Hans"
+Type: filesandordirs; Name: "{app}\zh-Hant"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; WorkingDir: "{app}"
