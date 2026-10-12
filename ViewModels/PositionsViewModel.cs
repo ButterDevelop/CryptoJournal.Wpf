@@ -23,6 +23,9 @@ public partial class PositionsViewModel : ObservableObject
     private TransactionsViewModel          _transactionsVm;
 
     public ObservableCollection<PositionRowVm> Positions { get; } = [];
+    public ObservableCollection<LedgerIssue> LedgerIssues { get; } = [];
+
+    public bool HasLedgerIssues => LedgerIssues.Count > 0;
 
     public ScenarioEditorViewModel ScenarioEditor { get; }
 
@@ -184,11 +187,17 @@ public partial class PositionsViewModel : ObservableObject
         SelectedPosition = null;
     }
 
-    public async Task SetPositionsAsync(IEnumerable<PositionSnapshot> positions, CancellationToken ct = default)
+    public async Task SetPositionsAsync(
+        IEnumerable<PositionSnapshot> positions,
+        IEnumerable<LedgerIssue>?     issues = null,
+        CancellationToken             ct     = default)
     {
         ArgumentNullException.ThrowIfNull(positions);
 
         var posList = positions as IList<PositionSnapshot> ?? positions.ToList();
+        var spotIssues = (issues ?? [])
+            .Where(issue => issue.Kind == LedgerIssueKind.InsufficientSpotQuantity)
+            .ToList();
 
         var currentSymbols = posList.Where(p => p.Quantity > 0m && !string.IsNullOrWhiteSpace(p.Symbol))
                                     .Select(p => p.Symbol.Trim().ToUpperInvariant())
@@ -289,6 +298,11 @@ public partial class PositionsViewModel : ObservableObject
         {
             await _ui.InvokeAsync(() =>
             {
+                LedgerIssues.Clear();
+                foreach (var issue in spotIssues)
+                    LedgerIssues.Add(issue);
+                OnPropertyChanged(nameof(HasLedgerIssues));
+
                 Positions.Clear();
                 foreach (var r in rows)
                     Positions.Add(r);

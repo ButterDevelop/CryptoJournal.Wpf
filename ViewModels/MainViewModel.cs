@@ -228,7 +228,7 @@ public partial class MainViewModel : ObservableObject, IDisposable
 
             var snapshot = _calc.Calculate(fills, marks);
 
-            await PositionsVm.SetPositionsAsync(snapshot.Positions);
+            await PositionsVm.SetPositionsAsync(snapshot.Positions, snapshot.Issues);
             await FuturesVm.SetPositionsAsync(snapshot.FuturesPositions);
             await DashboardVm.UpdateAsync(snapshot, fills, marks, quote);
         }

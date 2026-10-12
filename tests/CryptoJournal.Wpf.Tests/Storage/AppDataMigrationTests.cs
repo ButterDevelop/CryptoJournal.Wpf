@@ -1,4 +1,8 @@
 using System.IO;
+using System.Text.Json;
+using CryptoJournal.Wpf.Domain.Enums;
+using CryptoJournal.Wpf.Domain.Models;
+using CryptoJournal.Wpf.Infrastructure.Serialization;
 using CryptoJournal.Wpf.Storage.Common;
 using CryptoJournal.Wpf.Tests.Support;
 
@@ -77,6 +81,54 @@ internal sealed class AppDataMigrationTests
             Assert.That(File.Exists(invalidFile), Is.True);
         }
     }
+
+    [Test]
+    public void Migrate_NewPortableSource_MergesPortfolioByTransactionId()
+    {
+        using var temporaryDirectory = new TemporaryDirectory();
+        var firstSource  = temporaryDirectory.GetPath("debug");
+        var secondSource = temporaryDirectory.GetPath("installed");
+        var destination  = temporaryDirectory.GetPath("local");
+        var relativePath = Path.Combine("Portfolio", "envs", "main", "portfolio.json");
+        var shared = CreateFill("BTC", new DateTimeOffset(2025, 1, 1, 0, 0, 0, TimeSpan.Zero));
+        var sourceDuplicate = shared with { Note = "must not overwrite destination" };
+        var installedOnly = CreateFill("STRK", shared.TimeUtc.AddDays(1));
+
+        WritePortfolio(Path.Combine(firstSource, relativePath), [shared]);
+        new AppDataMigration([firstSource], destination).Migrate();
+
+        WritePortfolio(Path.Combine(secondSource, relativePath), [sourceDuplicate, installedOnly]);
+        var result = new AppDataMigration([secondSource], destination).Migrate();
+        var merged = ReadPortfolio(Path.Combine(destination, relativePath));
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.CopiedFileCount, Is.EqualTo(1));
+            Assert.That(merged.Select(fill => fill.Id),
+                Is.EquivalentTo(new[] { shared.Id, installedOnly.Id }));
+            Assert.That(merged.Single(fill => fill.Id == shared.Id).Note, Is.Null);
+            Assert.That(File.Exists(Path.Combine(destination, relativePath) + ".bak"), Is.True);
+        }
+    }
+
+    private static TradeFill CreateFill(string symbol, DateTimeOffset time)
+        => new(
+            Guid.NewGuid(),
+            time,
+            TxType.Deposit,
+            symbol,
+            1m,
+            1m,
+            0m);
+
+    private static void WritePortfolio(string path, IReadOnlyList<TradeFill> fills)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, JsonSerializer.Serialize(fills, JsonUtil.Options));
+    }
+
+    private static IReadOnlyList<TradeFill> ReadPortfolio(string path)
+        => JsonSerializer.Deserialize<List<TradeFill>>(File.ReadAllText(path), JsonUtil.Options) ?? [];
 
     private static void WriteText(string path, string contents)
     {

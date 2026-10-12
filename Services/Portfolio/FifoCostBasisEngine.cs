@@ -29,6 +29,12 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
         }
     }
 
+    private sealed class PendingDeficit
+    {
+        public required int     IssueIndex;
+        public required decimal Quantity;
+    }
+
     private readonly IEnvironmentService _env;
 
     public FifoCostBasisEngine(IEnvironmentService env)
@@ -45,15 +51,12 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
         var queues  = new Dictionary<string, Queue<OpenLot>>(StringComparer.OrdinalIgnoreCase);
         var matches = new List<Match>();
         var issues  = new List<LedgerIssue>();
-        var invalidSymbols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var deficits = new Dictionary<string, Queue<PendingDeficit>>(StringComparer.OrdinalIgnoreCase);
         decimal realized = 0m;
 
         foreach (var f in fills)
         {
             var symbol = f.Symbol.Trim().ToUpperInvariant();
-
-            if (invalidSymbols.Contains(symbol))
-                continue;
 
             if (!queues.TryGetValue(symbol, out var q))
             {
@@ -69,15 +72,23 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                         if (string.Equals(symbol, _env.Current.QuoteCurrency, StringComparison.OrdinalIgnoreCase))
                             break;
 
+                        var quantity = ApplyToDeficits(symbol, f.Quantity, deficits, issues);
+                        if (quantity <= 0m)
+                            break;
+
+                        var fee = f.Quantity > 0m
+                            ? f.FeeQuote * (quantity / f.Quantity)
+                            : 0m;
+
                         var lot = new OpenLot
                         {
                             LotId             = Guid.NewGuid(),
                             SourceFillId      = f.Id,
                             TimeUtc           = f.TimeUtc,
                             Symbol            = symbol,
-                            QtyRemaining      = f.Quantity,
+                            QtyRemaining      = quantity,
                             Price             = f.Price,
-                            FeeQuoteAllocated = f.FeeQuote
+                            FeeQuoteAllocated = fee
                         };
                         q.Enqueue(lot);
                         break;
@@ -94,6 +105,7 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
 
                         if (qtyToConsume > available)
                         {
+                            var issueIndex = issues.Count;
                             issues.Add(new LedgerIssue(
                                 f.Id,
                                 symbol,
@@ -101,8 +113,20 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
                                 qtyToConsume,
                                 available,
                                 $"{f.Type} requests {qtyToConsume} {symbol}, but only {available} is available."));
-                            invalidSymbols.Add(symbol);
-                            break;
+
+                            if (!deficits.TryGetValue(symbol, out var pending))
+                            {
+                                pending = new Queue<PendingDeficit>();
+                                deficits[symbol] = pending;
+                            }
+
+                            pending.Enqueue(new PendingDeficit
+                            {
+                                IssueIndex = issueIndex,
+                                Quantity   = qtyToConsume - available
+                            });
+
+                            qtyToConsume = available;
                         }
 
                         var totalSellQty = qtyToConsume;
@@ -185,6 +209,41 @@ public sealed class FifoCostBasisEngine : ICostBasisEngine
             .Select(lot => lot.ToSnapshot())
             .ToList();
 
+        var invalidTransactionIds = issues
+            .Select(issue => issue.TransactionId)
+            .ToHashSet();
+        realized = matches
+            .Where(match => !invalidTransactionIds.Contains(match.ConsumeFillId))
+            .Sum(match => match.RealizedPnlQuote);
+
         return new CostBasisResult(remaining, matches, realized, issues);
+    }
+
+    private static decimal ApplyToDeficits(
+        string                                            symbol,
+        decimal                                           quantity,
+        IReadOnlyDictionary<string, Queue<PendingDeficit>> deficits,
+        IList<LedgerIssue>                                issues)
+    {
+        if (!deficits.TryGetValue(symbol, out var pending))
+            return quantity;
+
+        while (quantity > 0m && pending.Count > 0)
+        {
+            var deficit = pending.Peek();
+            var covered = Math.Min(quantity, deficit.Quantity);
+
+            quantity         -= covered;
+            deficit.Quantity -= covered;
+
+            if (deficit.Quantity > 0m)
+                continue;
+
+            var issue = issues[deficit.IssueIndex];
+            issues[deficit.IssueIndex] = issue with { IsReconciled = true };
+            pending.Dequeue();
+        }
+
+        return quantity;
     }
 }

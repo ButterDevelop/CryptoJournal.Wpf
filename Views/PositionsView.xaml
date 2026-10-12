@@ -28,11 +28,36 @@
           MouseDown="Root_MouseDown">
 
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <DataGrid Grid.Row="0"
+        <Border Grid.Row="0"
+                Margin="0,0,0,12"
+                Padding="12"
+                CornerRadius="8"
+                Background="#33FFB300"
+                BorderBrush="#FFFFB300"
+                BorderThickness="1"
+                Visibility="{Binding HasLedgerIssues, Converter={StaticResource BoolToVis}}">
+            <StackPanel>
+                <TextBlock Text="Position history needs attention"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,6"/>
+                <ItemsControl ItemsSource="{Binding LedgerIssues}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayMessage}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,2"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <DataGrid Grid.Row="1"
                   ItemsSource="{Binding Source={StaticResource PositionsView}}"
                   SelectedItem="{Binding SelectedPosition, Mode=TwoWay}"
                   AlternationCount="2"
@@ -120,7 +145,7 @@
         </DataGrid>
 
         <!-- Position Scenario Editor Panel -->
-        <Border Grid.Row="1"
+        <Border Grid.Row="2"
                 x:Name="ScenarioPanel"
                 Margin="0,12,0,0"
                 Padding="12"

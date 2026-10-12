@@ -135,7 +135,7 @@ internal sealed class FifoCostBasisEngineTests
     }
 
     [Test]
-    public void Build_Oversell_PreservesLotsAndReportsIssue()
+    public void Build_Oversell_ConsumesAvailableLotsAndReportsIssue()
     {
         var buy = new TradeFillBuilder()
             .As(TxType.Buy)
@@ -155,12 +155,93 @@ internal sealed class FifoCostBasisEngineTests
 
         using (Assert.EnterMultipleScope())
         {
-            Assert.That(result.Matches, Is.Empty);
+            Assert.That(result.Matches, Has.Count.EqualTo(1));
+            Assert.That(result.Matches[0].Qty, Is.EqualTo(5m));
             Assert.That(result.RealizedPnlQuote, Is.Zero);
-            Assert.That(result.LotsRemaining.Single().QtyRemaining, Is.EqualTo(5m));
+            Assert.That(result.LotsRemaining, Is.Empty);
             Assert.That(result.Issues, Has.Count.EqualTo(1));
             Assert.That(result.Issues[0].TransactionId, Is.EqualTo(sell.Id));
             Assert.That(result.Issues[0].AvailableQuantity, Is.EqualTo(5m));
+            Assert.That(result.Issues[0].ShortageQuantity, Is.EqualTo(1m));
+            Assert.That(result.Issues[0].IsReconciled, Is.False);
+        }
+    }
+
+    [Test]
+    public void Build_OversellFollowedByDeposit_RecoversCurrentPosition()
+    {
+        var buy = new TradeFillBuilder()
+            .As(TxType.Buy)
+            .For("BTC")
+            .WithQuantity(5m)
+            .AtPrice(2m)
+            .Build();
+        var sell = new TradeFillBuilder()
+            .At(buy.TimeUtc.AddMinutes(1))
+            .As(TxType.Sell)
+            .For("BTC")
+            .WithQuantity(6m)
+            .AtPrice(3m)
+            .Build();
+        var deposit = new TradeFillBuilder()
+            .At(buy.TimeUtc.AddMinutes(2))
+            .As(TxType.Deposit)
+            .For("BTC")
+            .WithQuantity(2m)
+            .AtPrice(4m)
+            .WithFee(0.2m)
+            .Build();
+
+        var result = _engine.Build([buy, sell, deposit]);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.RealizedPnlQuote, Is.Zero);
+            Assert.That(result.LotsRemaining, Has.Count.EqualTo(1));
+            Assert.That(result.LotsRemaining[0].QtyRemaining, Is.EqualTo(1m));
+            Assert.That(result.LotsRemaining[0].Price, Is.EqualTo(4m));
+            Assert.That(result.LotsRemaining[0].FeeQuoteAllocated, Is.EqualTo(0.1m));
+            Assert.That(result.Issues, Has.Count.EqualTo(1));
+            Assert.That(result.Issues[0].IsReconciled, Is.True);
+        }
+    }
+
+    [Test]
+    public void Build_BitcoinHistoryWithLaterDeposit_PreservesNetQuantity()
+    {
+        var start = new DateTimeOffset(2025, 10, 16, 18, 0, 0, TimeSpan.Zero);
+        var availableBeforeSale = new TradeFillBuilder()
+            .At(start)
+            .As(TxType.Deposit)
+            .For("BTC")
+            .WithQuantity(0.00000245567111665914m)
+            .AtPrice(100_000m)
+            .Build();
+        var sell = new TradeFillBuilder()
+            .At(start.AddMinutes(41))
+            .As(TxType.Sell)
+            .For("BTC")
+            .WithQuantity(0.0000200613421160972m)
+            .AtPrice(110_000m)
+            .Build();
+        var deposit = new TradeFillBuilder()
+            .At(new DateTimeOffset(2025, 12, 12, 21, 0, 0, TimeSpan.Zero))
+            .As(TxType.Deposit)
+            .For("BTC")
+            .WithQuantity(0.00054359m)
+            .AtPrice(90_000m)
+            .Build();
+
+        var result = _engine.Build([availableBeforeSale, sell, deposit]);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(result.LotsRemaining.Sum(lot => lot.QtyRemaining),
+                Is.EqualTo(0.00052598432900056194m));
+            Assert.That(result.Issues, Has.Count.EqualTo(1));
+            Assert.That(result.Issues[0].ShortageQuantity,
+                Is.EqualTo(0.00001760567099943806m));
+            Assert.That(result.Issues[0].IsReconciled, Is.True);
         }
     }
 

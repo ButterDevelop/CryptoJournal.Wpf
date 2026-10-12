@@ -55,6 +55,16 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="UpdateButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource MaterialDesignRaisedButton}">
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Background" Value="#00BCD4"/>
+            <Setter Property="Foreground" Value="#151515"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto">
@@ -108,9 +118,11 @@
 
                     <WrapPanel Margin="0,0,0,16">
                         <Button Content="Check for updates"
+                                Style="{StaticResource UpdateButtonStyle}"
                                 Command="{Binding CheckForUpdatesCommand}"
                                 Margin="0,0,10,0"/>
                         <Button Content="{Binding InstallUpdateText}"
+                                Style="{StaticResource UpdateButtonStyle}"
                                 Command="{Binding InstallUpdateCommand}"
                                 Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BoolToVis}}"/>
                     </WrapPanel>

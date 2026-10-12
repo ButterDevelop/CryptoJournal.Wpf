@@ -96,7 +96,7 @@ The solution can also be opened in Visual Studio or JetBrains Rider.
 Install [Inno Setup 6](https://jrsoftware.org/isinfo.php), then run:
 
 ```powershell
-.\scripts\Build-Installer.ps1 -Version 1.0.4
+.\scripts\Build-Installer.ps1 -Version 1.0.5
 ```
 
 The script creates a self-contained `win-x64` publish, compiles the installer, and
@@ -109,8 +109,8 @@ format also publishes a GitHub Release with the installer, checksum, and generat
 release notes.
 
 ```powershell
-git tag v1.0.4
-git push origin v1.0.4
+git tag v1.0.5
+git push origin v1.0.5
 ```
 
 The tag supplies the version for both the application and installer. The release job

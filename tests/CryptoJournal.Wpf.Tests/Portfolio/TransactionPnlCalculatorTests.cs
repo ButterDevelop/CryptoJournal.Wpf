@@ -82,6 +82,42 @@ internal sealed class TransactionPnlCalculatorTests
     }
 
     [Test]
+    public void Calculate_ReconciledOversell_DoesNotShowPartialPnlForInvalidSale()
+    {
+        var start = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        var buy = new TradeFillBuilder()
+            .At(start)
+            .As(TxType.Buy)
+            .For("BTC")
+            .WithQuantity(5m)
+            .AtPrice(2m)
+            .Build();
+        var sell = new TradeFillBuilder()
+            .At(start.AddMinutes(1))
+            .As(TxType.Sell)
+            .For("BTC")
+            .WithQuantity(6m)
+            .AtPrice(3m)
+            .Build();
+        var deposit = new TradeFillBuilder()
+            .At(start.AddMinutes(2))
+            .As(TxType.Deposit)
+            .For("BTC")
+            .WithQuantity(2m)
+            .AtPrice(4m)
+            .Build();
+
+        var calculation = _calculator.Calculate([buy, sell, deposit]);
+
+        using (Assert.EnterMultipleScope())
+        {
+            Assert.That(calculation.ByTransactionId, Does.Not.ContainKey(sell.Id));
+            Assert.That(calculation.Issues, Has.Count.EqualTo(1));
+            Assert.That(calculation.Issues[0].IsReconciled, Is.True);
+        }
+    }
+
+    [Test]
     public void Calculate_LeveragedFutureClose_ReturnsRoeWithoutMultiplyingPnl()
     {
         var start = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);

@@ -170,7 +170,6 @@ public partial class TransactionsViewModel : ObservableObject
         if (selectedId is not null)
             Selected = Rows.FirstOrDefault(x => x.Id == selectedId);
 
-        ValidationMessage = FormatIssues(calculation.Issues);
         RefreshFilters();
         return calculation.Issues;
     }
@@ -202,6 +201,7 @@ public partial class TransactionsViewModel : ObservableObject
         }
 
         RecomputeSellPnl();
+        ValidationMessage = null;
         RefreshFilters();
 
         _ = WarmupIconsAsync(); // Preload crypto icons asynchronously
@@ -239,8 +239,14 @@ public partial class TransactionsViewModel : ObservableObject
     public async Task CommitEditsAsync()
     {
         var issues = RecomputeSellPnl();
-        if (issues.Count > 0)
+        var unresolvedIssues = issues.Where(issue => !issue.IsReconciled).ToList();
+        if (unresolvedIssues.Count > 0)
+        {
+            ValidationMessage = FormatIssues(unresolvedIssues);
             return;
+        }
+
+        ValidationMessage = null;
 
         var dirtyRows = Rows.Where(r => r.IsSymbolDirty).ToList();
 
@@ -301,9 +307,10 @@ public partial class TransactionsViewModel : ObservableObject
             _ = WarmupIconsAsync(); // Check if we need to load a new coin icon
 
             var issues = RecomputeSellPnl();
-            if (issues.Count > 0)
+            var newIssues = issues.Where(issue => issue.TransactionId == fill.Id).ToList();
+            if (newIssues.Count > 0)
             {
-                var validationMessage = ValidationMessage;
+                var validationMessage = FormatIssues(newIssues);
                 Rows.Remove(row);
                 RecomputeSellPnl();
                 ValidationMessage = validationMessage;
@@ -350,6 +357,7 @@ public partial class TransactionsViewModel : ObservableObject
         if (ReferenceEquals(Selected, row)) Selected = null;
         
         RecomputeSellPnl();
+        ValidationMessage = null;
         RefreshFilters();
         await SaveAsync();
         

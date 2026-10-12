@@ -23,7 +23,11 @@ public sealed class TransactionPnlCalculator
         var spot      = _spot.Build(fills);
         var futures   = _futures.Build(fills);
 
-        AddSpotResults(spot, fillTypes, results);
+        var invalidSpotTransactions = spot.Issues
+            .Select(issue => issue.TransactionId)
+            .ToHashSet();
+
+        AddSpotResults(spot, fillTypes, invalidSpotTransactions, results);
         AddFuturesResults(futures, results);
 
         return new TransactionPnlCalculation(
@@ -34,6 +38,7 @@ public sealed class TransactionPnlCalculator
     private static void AddSpotResults(
         CostBasisResult                 spot,
         IReadOnlyDictionary<Guid, TxType> fillTypes,
+        IReadOnlySet<Guid>               invalidTransactions,
         IDictionary<Guid, TransactionPnl> results)
     {
         var sellMatches = spot.Matches
@@ -42,6 +47,9 @@ public sealed class TransactionPnlCalculator
 
         foreach (var matches in sellMatches)
         {
+            if (invalidTransactions.Contains(matches.Key))
+                continue;
+
             var realizedPnl = matches.Sum(match => match.RealizedPnlQuote);
             var costBasis   = matches.Sum(match =>
                 match.BuyPrice * match.Qty + match.FeeBuyPartQuote);

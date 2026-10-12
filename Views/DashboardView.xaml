@@ -66,7 +66,9 @@
                 <materialDesign:Card Grid.Column="0" Padding="14">
                     <StackPanel>
                         <TextBlock Text="Allocation" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                        <lvc:PieChart Series="{Binding AllocationSeries}" Height="260"/>
+                        <lvc:PieChart Series="{Binding AllocationSeries}"
+                                      Height="260"
+                                      Background="Transparent"/>
                     </StackPanel>
                 </materialDesign:Card>
 
@@ -80,6 +82,7 @@
                         <TextBlock Text="PnL (Realized vs Unrealized)" FontWeight="SemiBold" Margin="0,0,0,8"/>
 
                         <lvc:CartesianChart Grid.Row="1"
+                                            Background="Transparent"
                             Series="{Binding PnlSeries}"
                             XAxes="{Binding PnlXAxes}"
                             YAxes="{Binding PnlYAxes}"

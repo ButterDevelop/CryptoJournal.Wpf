@@ -1,3 +1,5 @@
+using CryptoJournal.Wpf.Domain.Models;
+using CryptoJournal.Wpf.Infrastructure.Serialization;
 using System.IO;
 using System.Text.Json;
 
@@ -37,12 +39,15 @@ public sealed class AppDataMigration
 
     public AppDataMigrationResult Migrate()
     {
-        if (File.Exists(Path.Combine(_destinationDirectory, MarkerFileName)))
-            return new AppDataMigrationResult(0, []);
+        var migratedSources = ReadMigratedSources();
         var sources = _sourceDirectories
             .Where(Directory.Exists)
             .Where(path => !PathsEqual(path, _destinationDirectory))
+            .Where(path => !migratedSources.Contains(path))
             .ToArray();
+
+        if (sources.Length == 0)
+            return new AppDataMigrationResult(0, []);
 
         ValidateJsonFiles(sources);
 
@@ -77,9 +82,48 @@ public sealed class AppDataMigration
 
     private AppDataMigrationResult MergeIntoExistingDestination(IReadOnlyList<string> sources)
     {
-        var copied = CopyMissingFiles(sources, _destinationDirectory, useAtomicFileMove: true);
-        WriteMarker(_destinationDirectory, sources, copied);
-        return new AppDataMigrationResult(copied, sources);
+        var changed = MergePortfolioFiles(sources, _destinationDirectory);
+        changed += CopyMissingFiles(sources, _destinationDirectory, useAtomicFileMove: true);
+        WriteMarker(_destinationDirectory, sources, changed);
+        return new AppDataMigrationResult(changed, sources);
+    }
+
+    private static int MergePortfolioFiles(IReadOnlyList<string> sources, string destination)
+    {
+        var changed = 0;
+
+        foreach (var source in sources)
+        {
+            foreach (var sourceFile in EnumerateFiles(source).Where(IsPortfolioFile))
+            {
+                var relativePath    = Path.GetRelativePath(source, sourceFile);
+                var destinationFile = Path.Combine(destination, relativePath);
+
+                if (!File.Exists(destinationFile))
+                    continue;
+
+                var existing = DeserializePortfolio(destinationFile);
+                var existingIds = existing.Select(fill => fill.Id).ToHashSet();
+                var additions = DeserializePortfolio(sourceFile)
+                    .Where(fill => existingIds.Add(fill.Id))
+                    .ToList();
+
+                if (additions.Count == 0)
+                    continue;
+
+                var merged = existing
+                    .Concat(additions)
+                    .OrderBy(fill => fill.TimeUtc)
+                    .ThenBy(fill => fill.Id)
+                    .ToList();
+                var json = JsonSerializer.Serialize(merged, JsonUtil.Options);
+
+                AtomicFile.WriteText(destinationFile, json);
+                changed++;
+            }
+        }
+
+        return changed;
     }
 
     private static int CopyMissingFiles(
@@ -160,28 +204,78 @@ public sealed class AppDataMigration
     private static bool IsJsonFile(string path)
         => string.Equals(Path.GetExtension(path), ".json", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsPortfolioFile(string path)
+        => string.Equals(Path.GetFileName(path), "portfolio.json", StringComparison.OrdinalIgnoreCase)
+           && path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+               .Contains("Portfolio", StringComparer.OrdinalIgnoreCase);
+
+    private static List<TradeFill> DeserializePortfolio(string path)
+    {
+        try
+        {
+            using var stream = File.OpenRead(path);
+            return JsonSerializer.Deserialize<List<TradeFill>>(stream, JsonUtil.Options) ?? [];
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException($"Portfolio file contains invalid JSON: {path}", ex);
+        }
+    }
+
     private static bool PathsEqual(string left, string right)
         => string.Equals(
             Path.TrimEndingDirectorySeparator(left),
             Path.TrimEndingDirectorySeparator(right),
             StringComparison.OrdinalIgnoreCase);
 
+    private HashSet<string> ReadMigratedSources()
+        => ReadMigratedSources(_destinationDirectory);
+
+    private static HashSet<string> ReadMigratedSources(string destination)
+    {
+        var path = Path.Combine(destination, MarkerFileName);
+        if (!File.Exists(path))
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            using var stream   = File.OpenRead(path);
+            using var document = JsonDocument.Parse(stream);
+            if (!document.RootElement.TryGetProperty("sources", out var sources))
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            return sources.EnumerateArray()
+                .Where(element => element.ValueKind == JsonValueKind.String)
+                .Select(element => element.GetString())
+                .Where(source => !string.IsNullOrWhiteSpace(source))
+                .Select(source => Path.GetFullPath(source!))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch (JsonException)
+        {
+            return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
     private static void WriteMarker(
         string                destination,
         IReadOnlyList<string> sources,
         int                   copiedFileCount)
     {
+        var markerPath      = Path.Combine(destination, MarkerFileName);
+        var migratedSources = ReadMigratedSources(destination);
+        migratedSources.UnionWith(sources);
+
         var marker = new
         {
             version = 1,
             migratedAtUtc = DateTimeOffset.UtcNow,
-            sources,
+            sources = migratedSources.Order(StringComparer.OrdinalIgnoreCase),
             copiedFileCount
         };
-        var path = Path.Combine(destination, MarkerFileName);
         var json = JsonSerializer.Serialize(marker, new JsonSerializerOptions { WriteIndented = true });
 
-        File.WriteAllText(path, json);
+        AtomicFile.WriteText(markerPath, json);
     }
 }
 
